@@ -3,6 +3,14 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
+import sys
+from pathlib import Path
+
+# Добавляем корень проекта в PYTHONPATH, чтобы работали импорты config/models на сервере
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from config import DATABASE_URL
 from models import Base
 

@@ -29,5 +29,4 @@ Thumbs.db
 
 # Artifacts / reports / tmp
 nohup.out
-*.txt
 *.md.backup
