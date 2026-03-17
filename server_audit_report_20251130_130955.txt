@@ -1,0 +1,333 @@
+================================================================================
+ОТЧЕТ ОБ АУДИТЕ СЕРВЕРА
+Дата: 2025-11-30 13:09:52
+================================================================================
+
+================================================================================
+1. СИСТЕМНАЯ ИНФОРМАЦИЯ
+================================================================================
+
+OS_RELEASE:
+  PRETTY_NAME: Ubuntu 22.04.5 LTS
+  NAME: Ubuntu
+  VERSION_ID: 22.04
+  VERSION: 22.04.5 LTS (Jammy Jellyfish)
+  VERSION_CODENAME: jammy
+  ID: ubuntu
+  ID_LIKE: debian
+  HOME_URL: https://www.ubuntu.com/
+  SUPPORT_URL: https://help.ubuntu.com/
+  BUG_REPORT_URL: https://bugs.launchpad.net/ubuntu/
+  PRIVACY_POLICY_URL: https://www.ubuntu.com/legal/terms-and-policies/privacy-policy
+  UBUNTU_CODENAME: jammy
+
+================================================================================
+2. SYSTEMD СЕРВИСЫ
+================================================================================
+
+Активных сервисов: 0
+Неактивных сервисов: 0
+Упавших сервисов: 0
+Включенных сервисов: 0
+Выключенных сервисов: 0
+
+⚠️  Активные сервисы не найдены (возможно, проблема с парсингом)
+Попытка альтернативного метода...
+
+
+================================================================================
+3. ЗАНЯТЫЕ ПОРТЫ
+================================================================================
+
+Прослушивающих портов: 15
+
+Порты в режиме LISTEN:
+
+  📌 unknown:
+     TCP    *:53                      (PID: N/A)
+     TCP    *:8501                    (PID: N/A)
+     TCP    *:5001                    (PID: N/A)
+     TCP    *:5003                    (PID: N/A)
+     TCP    *:5002                    (PID: N/A)
+     TCP    *:9000                    (PID: N/A)
+     TCP    *:5432                    (PID: N/A)
+     TCP    *:443                     (PID: N/A)
+     TCP    *:80                      (PID: N/A)
+     TCP    *:22                      (PID: N/A)
+     TCP    *:8100                    (PID: N/A)
+     TCP    *:2222                    (PID: N/A)
+     TCP    *:8000                    (PID: N/A)
+     TCP    *:8001                    (PID: N/A)
+     TCP    *:8002                    (PID: N/A)
+
+================================================================================
+4. ПРОЦЕССЫ
+================================================================================
+
+Всего процессов: 0
+Python процессов: 29
+Node.js процессов: 0
+Nginx процессов: 0
+Apache процессов: 0
+MySQL процессов: 0
+PostgreSQL процессов: 0
+Docker процессов: 0
+
+Python процессы:
+  PID 833    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/edelweiss-consent/venv/bin/python3 /opt/edelweiss-consent/venv/bin/uvicorn app_lite.main:app --host 0.0.0.0 --port 
+  PID 837    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /usr/bin/python3 /usr/bin/networkd-dispatcher --run-startup-triggers
+  PID 913    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/msphoto/venv/bin/python3 /root/msphoto/run_bot.py
+  PID 926    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal
+  PID 951    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/champ/.venv/bin/python /root/champ/.venv/bin/streamlit run /root/champ/app_streamlit.py --server.headless true --s
+  PID 982    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/edelweiss-consent/venv/bin/python3 -c from multiprocessing.resource_tracker import main;main(6)
+  PID 983    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/edelweiss-consent/venv/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=7, pipe_h
+  PID 984    (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/edelweiss-consent/venv/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=7, pipe_h
+  PID 1016   (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/ffkm-consent/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+  PID 1017   (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/secretary-portal/venv/bin/python3 /opt/secretary-portal/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8002 
+  PID 1046   (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/secretary-portal/venv/bin/python3 -c from multiprocessing.resource_tracker import main;main(4)
+  PID 1047   (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/secretary-portal/venv/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=5, pipe_ha
+  PID 1048   (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/secretary-portal/venv/bin/python3 -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=5, pipe_ha
+  PID 44200  (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/edelweiss/venv/bin/python3 /var/www/edelweiss/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5003 --timeout 120
+  PID 44204  (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/edelweiss/venv/bin/python3 /var/www/edelweiss/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5003 --timeout 120
+  PID 44205  (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/edelweiss/venv/bin/python3 /var/www/edelweiss/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5003 --timeout 120
+  PID 44206  (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/edelweiss/venv/bin/python3 /var/www/edelweiss/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5003 --timeout 120
+  PID 279858 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 279865 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 279866 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 279867 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 279868 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 279869 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /root/mainstreamfs.ru/venv/bin/python3 /root/mainstreamfs.ru/venv/bin/gunicorn -c gunicorn_config.py wsgi:application
+  PID 570703 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/ffkm-admin/backend/venv/bin/python3 /var/www/ffkm-admin/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 
+  PID 634656 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/calc.figurebase.ru/venv/bin/python app.py
+  PID 634658 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /var/www/calc.figurebase.ru/venv/bin/python app.py
+  PID 645041 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /opt/cartoteka/backend/venv/bin/python3 /opt/cartoteka/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 810
+  PID 671475 (unknown   ) CPU: 0.0  % MEM: 0.0  % - /usr/bin/python3 main.py
+  PID 672862 (unknown   ) CPU: 0.0  % MEM: 0.0  % - python3 server_audit.py
+
+================================================================================
+5. НАЙДЕННЫЕ ПРОЕКТЫ
+================================================================================
+
+/root:
+  📁 msphoto
+     Путь: /root/msphoto
+     Тип: python
+     Размер: 110.26 MB
+     Файлов: 2629
+     Индикаторы: requirements.txt, main.py, config.py, .env
+
+  📁 judges_bot
+     Путь: /root/judges_bot
+     Тип: python
+     Размер: 2.58 MB
+     Файлов: 29
+     Индикаторы: requirements.txt, main.py, config.py, .env
+
+  📁 opros
+     Путь: /root/opros
+     Тип: python
+     Размер: 4.01 MB
+     Файлов: 3
+     Индикаторы: main.py
+
+  📁 judges_bot_v2
+     Путь: /root/judges_bot_v2
+     Тип: python
+     Размер: 3.7 MB
+     Файлов: 92
+     Индикаторы: requirements.txt, main.py, config.py, .env
+
+  📁 mainstreamfs.ru
+     Путь: /root/mainstreamfs.ru
+     Тип: python
+     Размер: 208.27 MB
+     Файлов: 9555
+     Индикаторы: requirements.txt, .git, config.py, .env
+
+  📁 ffkm_bot
+     Путь: /root/ffkm_bot
+     Тип: python
+     Размер: 34.3 MB
+     Файлов: 5
+     Индикаторы: main.py
+
+  📁 ffkm_feedback
+     Путь: /root/ffkm_feedback
+     Тип: python
+     Размер: 82.1 MB
+     Файлов: 4188
+     Индикаторы: requirements.txt, config.py, .env
+
+  📁 mainstreamfs.ru copy
+     Путь: /root/mainstreamfs.ru copy
+     Тип: python
+     Размер: 4.04 MB
+     Файлов: 1029
+     Индикаторы: requirements.txt, .git, config.py, .env
+
+  📁 uchet
+     Путь: /root/uchet
+     Тип: python
+     Размер: 8.56 MB
+     Файлов: 8
+     Индикаторы: requirements.txt
+
+  📁 bot3
+     Путь: /root/bot_gpt/bot3
+     Тип: docker
+     Размер: 263.98 MB
+     Файлов: 3010
+     Индикаторы: requirements.txt, Dockerfile, .git, .env
+
+/opt:
+  📁 secretary-portal
+     Путь: /opt/secretary-portal
+     Тип: python
+     Размер: 121.75 MB
+     Файлов: 4989
+     Индикаторы: requirements.txt, .env
+
+  📁 ffkm-consent
+     Путь: /opt/ffkm-consent
+     Тип: docker
+     Размер: 589.66 MB
+     Файлов: 14022
+     Индикаторы: requirements.txt, Dockerfile, .env
+
+  📁 edelweiss-consent
+     Путь: /opt/edelweiss-consent
+     Тип: unknown
+     Размер: 101.65 MB
+     Файлов: 3748
+     Индикаторы: .env
+
+  📁 cartoteka
+     Путь: /opt/cartoteka
+     Тип: unknown
+     Размер: 632.36 MB
+     Файлов: 30193
+     Индикаторы: .git
+
+/var:
+  📁 figurebase.ru
+     Путь: /var/www/figurebase.ru
+     Тип: nodejs
+     Размер: 118.29 MB
+     Файлов: 10743
+     Индикаторы: package.json
+
+  📁 ffkm-admin.old
+     Путь: /var/www/ffkm-admin.old
+     Тип: python
+     Размер: 8478.61 MB
+     Файлов: 48129
+     Индикаторы: requirements.txt, .env
+
+  📁 ffkm-admin
+     Путь: /var/www/ffkm-admin
+     Тип: python
+     Размер: 2760.75 MB
+     Файлов: 42716
+     Индикаторы: requirements.txt, .git
+
+  📁 edelweiss
+     Путь: /var/www/edelweiss
+     Тип: python
+     Размер: 82.39 MB
+     Файлов: 4942
+     Индикаторы: requirements.txt, .git, app.py, .env
+
+  📁 calc.figurebase.ru
+     Путь: /var/www/calc.figurebase.ru
+     Тип: python
+     Размер: 140.16 MB
+     Файлов: 5428
+     Индикаторы: requirements.txt, app.py
+
+/var/www:
+  📁 figurebase.ru
+     Путь: /var/www/figurebase.ru
+     Тип: nodejs
+     Размер: 118.29 MB
+     Файлов: 10743
+     Индикаторы: package.json
+
+  📁 ffkm-admin.old
+     Путь: /var/www/ffkm-admin.old
+     Тип: python
+     Размер: 8478.61 MB
+     Файлов: 48129
+     Индикаторы: requirements.txt, .env
+
+  📁 ffkm-admin
+     Путь: /var/www/ffkm-admin
+     Тип: python
+     Размер: 2760.75 MB
+     Файлов: 42716
+     Индикаторы: requirements.txt, .git
+
+  📁 edelweiss
+     Путь: /var/www/edelweiss
+     Тип: python
+     Размер: 82.39 MB
+     Файлов: 4942
+     Индикаторы: requirements.txt, .git, app.py, .env
+
+  📁 calc.figurebase.ru
+     Путь: /var/www/calc.figurebase.ru
+     Тип: python
+     Размер: 140.16 MB
+     Файлов: 5428
+     Индикаторы: requirements.txt, app.py
+
+================================================================================
+6. БЕЗОПАСНОСТЬ
+================================================================================
+
+SSH:
+  Конфигурация:
+    include: /etc/ssh/sshd_config.d/*.conf
+    port: 2222
+    permitrootlogin: yes
+    pubkeyauthentication: yes
+    passwordauthentication: yes
+    kbdinteractiveauthentication: no
+    usepam: yes
+    x11forwarding: no
+    printmotd: no
+    acceptenv: LANG LC_*
+  Авторизованных ключей: 2
+
+================================================================================
+7. ПОЛЬЗОВАТЕЛИ
+================================================================================
+
+Всего пользователей: 0
+Пользователей с shell: 0
+================================================================================
+8. CRON ЗАДАЧИ
+================================================================================
+
+Системные cron задачи:
+  /etc/cron.d:
+    - certbot
+    - .placeholder
+    - e2scrub_all
+    - sysstat
+    - php
+  /etc/cron.daily:
+    - man-db
+    - apt-compat
+    - apport
+    - logrotate
+    - .placeholder
+    - dpkg
+    - sysstat
+  /etc/cron.hourly:
+    - .placeholder
+  /etc/cron.weekly:
+    - man-db
+    - .placeholder
+  /etc/cron.monthly:
+    - .placeholder
+
