@@ -12,7 +12,7 @@ def create_app() -> FastAPI:
     app.include_router(tournaments.router, prefix="/api/v1/tournaments", tags=["tournaments"])
     app.include_router(registrations.router, prefix="/api/v1/registrations", tags=["registrations"])
     app.include_router(payments.router, prefix="/api/v1", tags=["payments"])
-    app.include_router(budgets.router, prefix="/api/v1", tags=["budgets"])
+    app.include_router(budgets.router, prefix="/api/v1/admin/budgets", tags=["budgets"])
     app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
     app.include_router(exports.router, prefix="/api/v1/admin/exports", tags=["exports"])
 
