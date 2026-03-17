@@ -5,12 +5,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+import os
+
 from database import SessionLocal
 from models import User
 from config import ADMIN_IDS
 
 
-JWT_SECRET = "CHANGE_ME_SECRET"  # TODO: move to env later
+JWT_SECRET = os.getenv("JWT_SECRET", "CHANGE_ME_SECRET")
 JWT_ALGORITHM = "HS256"
 
 

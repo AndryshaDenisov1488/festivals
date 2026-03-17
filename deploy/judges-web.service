@@ -1,0 +1,15 @@
+[Unit]
+Description=Judges Bot Web Frontend
+After=network.target judges-api.service
+
+[Service]
+Type=simple
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/judges_bot_v2/web
+Environment=PORT=3000
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
