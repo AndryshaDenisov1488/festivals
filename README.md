@@ -124,9 +124,9 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ### 7. Вход в веб
 
-1. Судья должен иметь email в базе (привязан через бота)
-2. На странице логина ввести email
-3. Получить код на почту (проверь SMTP)
+1. Судья привязывает email в боте: главное меню → «Привязать email (для входа на сайт)» → ввести email → получить код на почту → ввести код
+2. На странице логина веб-портала ввести email
+3. Получить код на почту (проверь SMTP в .env)
 4. Ввести код и войти
 
 ## API
@@ -138,8 +138,19 @@ sudo nginx -t && sudo systemctl reload nginx
 - `GET /api/v1/registrations/my` — мои заявки
 - `POST /api/v1/registrations` — подать заявку
 - `DELETE /api/v1/registrations/{id}` — отменить заявку
+- `GET /api/v1/earnings/my/payments` — список выплат (с payment_id для confirm/correct)
 - `GET /api/v1/earnings/my/detail` — детали выплат
 - `GET /api/v1/earnings/my/summary` — сводка выплат
+- `POST /api/v1/earnings/my/confirm` — подтвердить получение оплаты
+- `POST /api/v1/earnings/my/correct` — исправить сумму
 - `POST /api/v1/admin/broadcast` — рассылка (только админ)
+- `GET /api/v1/admin/registrations` — список заявок
+- `POST /api/v1/admin/registrations/{id}/approve` — одобрить заявку
+- `POST /api/v1/admin/registrations/{id}/reject` — отклонить заявку
+- `GET /api/v1/admin/budgets` — бюджеты турниров
+- `GET /api/v1/admin/budgets/summary` — сводка по прибыли
+- `GET/POST /api/v1/admin/budgets/{id}` — получить/установить бюджет
+- `GET /api/v1/admin/exports/month?month=...` — экспорт Excel по месяцу
+- `GET /api/v1/admin/exports/year?year=...` — экспорт Excel по году
 
 Документация: `http://IP:8100/docs`

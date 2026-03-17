@@ -19,6 +19,32 @@ def get_db():
         db.close()
 
 
+@router.get("/earnings/my/payments")
+def earnings_payments_list(
+    user: User = Depends(get_current_user),
+):
+    """Список всех выплат (оплаченных и ожидающих) с payment_id для confirm/correct"""
+    db = SessionLocal()
+    try:
+        payments = db.query(JudgePayment, Tournament).join(
+            Tournament, JudgePayment.tournament_id == Tournament.tournament_id
+        ).filter(JudgePayment.user_id == user.user_id).order_by(Tournament.date.desc()).all()
+        return [
+            {
+                "payment_id": p.payment_id,
+                "tournament_id": p.tournament_id,
+                "tournament_name": t.name,
+                "tournament_date": t.date.isoformat(),
+                "amount": p.amount,
+                "is_paid": p.is_paid,
+                "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+            }
+            for p, t in payments
+        ]
+    finally:
+        db.close()
+
+
 @router.get("/earnings/my/detail")
 def earnings_detail(
     user: User = Depends(get_current_user),

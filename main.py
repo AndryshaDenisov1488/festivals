@@ -23,6 +23,7 @@ from handlers.common_handlers import (
 )
 from handlers.user_handlers import (
     process_sign_up, process_month, process_tournament, setup_main_menu_button_handlers,
+    link_email_step, process_link_email_input, process_link_email_code,
     process_cancel_registration, process_cancel_reg_month, process_cancel_reg_id,
     process_confirm_cancel, process_cancel_action,
     my_registrations_step, process_my_registrations_month,
@@ -73,7 +74,7 @@ from handlers.budget_handlers import (
 from states import (
     RegisterReferee, AddTournament, EditTournament, EditProfile,
     MyRegistrations, CheckRegistrations, SendAllMessages, DeleteTournament,
-    PaymentAmount, BudgetInput, ManualPaymentInput, CorrectEarnings,
+    PaymentAmount, BudgetInput, ManualPaymentInput, CorrectEarnings, LinkEmail,
 )
 
 # ========== Логирование ==========
@@ -266,6 +267,9 @@ dp.register_callback_query_handler(
 
 # Редактирование профиля
 dp.register_callback_query_handler(edit_profile_step, Text(equals="edit_profile"))
+dp.register_callback_query_handler(link_email_step, Text(equals="link_email"))
+dp.register_message_handler(process_link_email_input, state=LinkEmail.waiting_for_email)
+dp.register_message_handler(process_link_email_code, state=LinkEmail.waiting_for_code)
 dp.register_message_handler(process_edit_profile_first_name, state=EditProfile.waiting_for_first_name)
 dp.register_message_handler(process_edit_profile_last_name, state=EditProfile.waiting_for_last_name)
 dp.register_message_handler(process_edit_profile_function, state=EditProfile.waiting_for_function)

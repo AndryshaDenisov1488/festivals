@@ -50,11 +50,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
-        <h1 className="mb-6 text-center text-xl font-semibold text-slate-800">
-          Вход в кабинет судьи
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-slate-50 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200/60 bg-white/90 p-8 shadow-xl backdrop-blur">
+        <h1 className="mb-2 text-center text-2xl font-bold tracking-tight text-slate-800">
+          Кабинет судьи
         </h1>
+        <p className="mb-6 text-center text-sm text-slate-500">
+          Войдите по email для доступа к турнирам и выплатам
+        </p>
 
         {step === 'email' ? (
           <form onSubmit={handleRequestCode} className="space-y-4">
@@ -68,7 +71,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-800 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30"
                 placeholder="judge@example.com"
                 disabled={loading}
               />
@@ -77,7 +80,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-slate-800 py-2 font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
+              className="w-full rounded-xl bg-slate-800 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-700 hover:shadow disabled:opacity-50"
             >
               {loading ? 'Отправка...' : 'Получить код'}
             </button>
@@ -98,7 +101,7 @@ export default function LoginPage() {
                 onChange={(e) => setCode(e.target.value)}
                 required
                 maxLength={6}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-lg tracking-widest text-slate-800 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-center text-lg tracking-widest text-slate-800 transition focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/30"
                 placeholder="000000"
                 disabled={loading}
               />
@@ -107,7 +110,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-slate-800 py-2 font-medium text-white transition hover:bg-slate-700 disabled:opacity-50"
+              className="w-full rounded-xl bg-slate-800 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-700 hover:shadow disabled:opacity-50"
             >
               {loading ? 'Проверка...' : 'Войти'}
             </button>

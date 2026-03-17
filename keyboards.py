@@ -11,6 +11,7 @@ def main_menu():
         InlineKeyboardButton("📋 Мои записи", callback_data='my_registrations'),
         InlineKeyboardButton("💰 Мой заработок", callback_data='my_earnings'),
         InlineKeyboardButton("⚙️ Изменить профиль", callback_data='edit_profile'),
+        InlineKeyboardButton("📧 Привязать email (для входа на сайт)", callback_data='link_email'),
         InlineKeyboardButton("🔙 Назад в главное меню", callback_data='back_to_main')
     )
     return keyboard

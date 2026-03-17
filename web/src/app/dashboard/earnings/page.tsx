@@ -2,38 +2,104 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { Check, Edit2 } from 'lucide-react'
 
-type TournamentEarning = {
-  name: string
-  date: string | null
-  amount: number
+type Payment = {
+  payment_id: number
+  tournament_id: number
+  tournament_name: string
+  tournament_date: string
+  amount: number | null
+  is_paid: boolean
   payment_date: string | null
-}
-
-type DetailResponse = {
-  tournament_earnings?: TournamentEarning[]
-  total_amount?: number
 }
 
 type SummaryResponse = { total_amount?: number }
 
 export default function EarningsPage() {
-  const [detail, setDetail] = useState<TournamentEarning[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
   const [summary, setSummary] = useState<SummaryResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [confirming, setConfirming] = useState<number | null>(null)
+  const [correcting, setCorrecting] = useState<number | null>(null)
+  const [confirmAmount, setConfirmAmount] = useState('')
+  const [correctAmount, setCorrectAmount] = useState('')
+  const [modalPayment, setModalPayment] = useState<Payment | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
     Promise.all([
-      api<DetailResponse>('/api/v1/earnings/my/detail', { token }).catch(() => ({})),
-      api<SummaryResponse>('/api/v1/earnings/my/summary', { token }).catch(() => null)
-    ]).then(([d, s]) => {
-      const resp = d as DetailResponse | Record<string, never>
-      setDetail('tournament_earnings' in resp ? (resp.tournament_earnings ?? []) : [])
-      setSummary(s)
-    }).finally(() => setLoading(false))
+      api<Payment[]>('/api/v1/earnings/my/payments', { token }),
+      api<SummaryResponse>('/api/v1/earnings/my/summary', { token })
+    ])
+      .then(([p, s]) => {
+        setPayments(p ?? [])
+        setSummary(s ?? null)
+      })
+      .catch(() => setPayments([]))
+      .finally(() => setLoading(false))
   }, [])
+
+  const handleConfirm = async (payment: Payment) => {
+    const amount = parseFloat(confirmAmount)
+    if (isNaN(amount) || amount < 3500) {
+      alert('Минимальная сумма 3500 ₽')
+      return
+    }
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setConfirming(payment.payment_id)
+    try {
+      await api(`/api/v1/earnings/my/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ payment_id: payment.payment_id, amount }),
+        token
+      })
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.payment_id === payment.payment_id
+            ? { ...p, is_paid: true, amount, payment_date: new Date().toISOString().slice(0, 10) }
+            : p
+        )
+      )
+      setModalPayment(null)
+      setConfirmAmount('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setConfirming(null)
+    }
+  }
+
+  const handleCorrect = async (payment: Payment) => {
+    const amount = parseFloat(correctAmount)
+    if (isNaN(amount) || amount <= 0) {
+      alert('Введите корректную сумму')
+      return
+    }
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setCorrecting(payment.payment_id)
+    try {
+      await api(`/api/v1/earnings/my/correct`, {
+        method: 'POST',
+        body: JSON.stringify({ payment_id: payment.payment_id, amount }),
+        token
+      })
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.payment_id === payment.payment_id ? { ...p, amount } : p
+        )
+      )
+      setModalPayment(null)
+      setCorrectAmount('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCorrecting(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -42,6 +108,9 @@ export default function EarningsPage() {
       </div>
     )
   }
+
+  const paidPayments = payments.filter((p) => p.is_paid)
+  const unpaidPayments = payments.filter((p) => !p.is_paid)
 
   return (
     <div>
@@ -52,25 +121,142 @@ export default function EarningsPage() {
           <p className="text-2xl font-semibold text-slate-800">{summary.total_amount} ₽</p>
         </div>
       )}
-      <div className="space-y-3">
-        {detail.map((e, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div>
-              <p className="font-medium text-slate-800">{e.name}</p>
-              <p className="text-sm text-slate-500">
-                {e.date ?? '—'} {e.payment_date ? `· Оплачено: ${e.payment_date}` : ''}
-              </p>
-            </div>
-            <p className="font-semibold text-slate-800">{e.amount} ₽</p>
+
+      {unpaidPayments.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-lg font-medium text-slate-700">Ожидают подтверждения</h2>
+          <div className="space-y-3">
+            {unpaidPayments.map((p) => (
+              <div
+                key={p.payment_id}
+                className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/50 p-4"
+              >
+                <div>
+                  <p className="font-medium text-slate-800">{p.tournament_name}</p>
+                  <p className="text-sm text-slate-500">{p.tournament_date}</p>
+                </div>
+                <button
+                  onClick={() => setModalPayment({ ...p, amount: null })}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  <Check className="h-4 w-4" />
+                  Подтвердить получение
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-        {detail.length === 0 && (
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-3 text-lg font-medium text-slate-700">История выплат</h2>
+        <div className="space-y-3">
+          {paidPayments.map((p) => (
+            <div
+              key={p.payment_id}
+              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <div>
+                <p className="font-medium text-slate-800">{p.tournament_name}</p>
+                <p className="text-sm text-slate-500">
+                  {p.tournament_date}
+                  {p.payment_date ? ` · Оплачено: ${String(p.payment_date).slice(0, 10)}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <p className="font-semibold text-slate-800">{p.amount ?? 0} ₽</p>
+                <button
+                  onClick={() => {
+                    setModalPayment(p)
+                    setCorrectAmount(String(p.amount ?? ''))
+                  }}
+                  className="rounded-lg border border-slate-300 p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  title="Исправить сумму"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {payments.length === 0 && (
           <p className="py-8 text-center text-slate-500">Нет выплат</p>
         )}
-      </div>
+      </section>
+
+      {modalPayment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setModalPayment(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 font-semibold text-slate-800">
+              {modalPayment.tournament_name}
+            </h3>
+            {!modalPayment.is_paid ? (
+              <>
+                <label className="mb-2 block text-sm text-slate-600">
+                  Сумма полученной оплаты (мин. 3500 ₽)
+                </label>
+                <input
+                  type="number"
+                  value={confirmAmount}
+                  onChange={(e) => setConfirmAmount(e.target.value)}
+                  placeholder="3500"
+                  min={3500}
+                  className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleConfirm(modalPayment)}
+                    disabled={confirming !== null}
+                    className="flex-1 rounded-lg bg-emerald-600 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {confirming ? 'Сохранение...' : 'Подтвердить'}
+                  </button>
+                  <button
+                    onClick={() => setModalPayment(null)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="mb-2 block text-sm text-slate-600">
+                  Исправить сумму
+                </label>
+                <input
+                  type="number"
+                  value={correctAmount}
+                  onChange={(e) => setCorrectAmount(e.target.value)}
+                  min={1}
+                  className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCorrect(modalPayment)}
+                    disabled={correcting !== null}
+                    className="flex-1 rounded-lg bg-slate-800 py-2 text-white hover:bg-slate-700 disabled:opacity-50"
+                  >
+                    {correcting ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                  <button
+                    onClick={() => setModalPayment(null)}
+                    className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

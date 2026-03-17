@@ -71,9 +71,9 @@ export default function DashboardLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 flex-col border-r border-slate-200 bg-white">
-        <div className="flex h-14 items-center border-b border-slate-200 px-4">
-          <span className="font-semibold text-slate-800">Кабинет судьи</span>
+      <aside className="flex w-56 flex-col border-r border-slate-200 bg-white shadow-sm">
+        <div className="flex h-16 items-center border-b border-slate-200 px-4">
+          <span className="text-lg font-bold tracking-tight text-slate-800">Кабинет судьи</span>
         </div>
         <nav className="flex flex-1 flex-col space-y-1 p-2">
           {navItems.map(({ href, label, icon: Icon }) => (

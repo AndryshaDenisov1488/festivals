@@ -11,9 +11,9 @@ type Registration = {
 }
 
 const statusLabels: Record<string, string> = {
-  PENDING: 'На рассмотрении',
-  APPROVED: 'Одобрена',
-  REJECTED: 'Отклонена'
+  pending: 'На рассмотрении',
+  approved: 'Одобрена',
+  rejected: 'Отклонена'
 }
 
 export default function RegistrationsPage() {
@@ -65,9 +65,9 @@ export default function RegistrationsPage() {
               </p>
               <span
                 className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                  r.status === 'APPROVED'
+                  r.status === 'approved'
                     ? 'bg-green-100 text-green-800'
-                    : r.status === 'REJECTED'
+                    : r.status === 'rejected'
                       ? 'bg-red-100 text-red-800'
                       : 'bg-amber-100 text-amber-800'
                 }`}
@@ -75,7 +75,7 @@ export default function RegistrationsPage() {
                 {statusLabels[r.status] ?? r.status}
               </span>
             </div>
-            {r.status === 'PENDING' && (
+            {r.status === 'pending' && (
               <button
                 onClick={() => handleCancel(r.registration_id)}
                 className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"

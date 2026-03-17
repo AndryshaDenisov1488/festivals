@@ -1,8 +1,7 @@
+import os
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
-
-from config import os
 
 
 SMTP_HOST = os.getenv("SMTP_HOST", "")

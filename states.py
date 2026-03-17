@@ -63,3 +63,8 @@ class ManualPaymentInput(StatesGroup):
     waiting_for_judge_selection = State()
     waiting_for_tournament_selection = State()
     waiting_for_amount = State()
+
+# Состояния для привязки email (вход на веб-портал)
+class LinkEmail(StatesGroup):
+    waiting_for_email = State()
+    waiting_for_code = State()

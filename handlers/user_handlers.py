@@ -9,7 +9,7 @@ from sqlalchemy import and_
 import sqlite3
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus
-from states import EditProfile, MyRegistrations, CorrectEarnings
+from states import EditProfile, MyRegistrations, CorrectEarnings, LinkEmail
 from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT
 from keyboards import main_menu
 from services.excel_export import split_text
@@ -19,6 +19,8 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 # Разрешаем буквы RU/EN + дефис, длина 2..30
 _NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё\-]{1,29}$")
+# Простая валидация email
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +168,131 @@ async def process_edit_profile_category(message: types.Message, state: FSMContex
     except Exception as e:
         logger.error(f"Ошибка в process_edit_profile_category: {e}")
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+        await state.finish()
+
+
+# ======== Привязка email (для входа на веб-портал) ========
+async def link_email_step(callback_query: types.CallbackQuery, state: FSMContext):
+    session = SessionLocal()
+    try:
+        user = session.query(User).filter(User.user_id == callback_query.from_user.id).first()
+        if not user:
+            await callback_query.message.answer("❌ Вы не зарегистрированы в системе.")
+            await callback_query.answer()
+            return
+        if user.email and getattr(user, "email_verified", False):
+            await callback_query.message.answer(
+                f"✅ Email уже привязан: <code>{user.email}</code>\n\n"
+                "Вы можете входить на веб-портал по этому адресу.",
+                parse_mode=ParseMode.HTML
+            )
+            await callback_query.answer()
+            return
+        await callback_query.message.answer(
+            "📧 Введите ваш <b>email</b> для входа на веб-портал судей:\n\n"
+            "Код подтверждения будет отправлен на указанный адрес.",
+            parse_mode=ParseMode.HTML
+        )
+        await LinkEmail.waiting_for_email.set()
+    finally:
+        session.close()
+        await callback_query.answer()
+
+
+async def process_link_email_input(message: types.Message, state: FSMContext):
+    if not message.text:
+        await message.answer("❌ Введите email.")
+        return
+    email = message.text.strip().lower()
+    if not _EMAIL_RE.match(email):
+        await message.answer("❌ Некорректный email. Пример: example@gmail.com")
+        return
+    session = SessionLocal()
+    try:
+        existing = session.query(User).filter(User.email == email).first()
+        if existing and existing.user_id != message.from_user.id:
+            await message.answer("❌ Этот email уже привязан к другому аккаунту.")
+            await state.finish()
+            return
+        from datetime import datetime, timedelta, timezone
+        import random
+        import string
+        from api.email_service import send_login_code_email
+
+        code = "".join(random.choices(string.digits, k=6))
+        now = datetime.now(timezone.utc)
+        user = session.query(User).filter(User.user_id == message.from_user.id).first()
+        if not user:
+            await message.answer("❌ Пользователь не найден.")
+            await state.finish()
+            return
+        user.email = email
+        user.email_verified = False
+        user.email_verification_code = code
+        user.email_verification_expires_at = now + timedelta(minutes=15)
+        session.commit()
+
+        send_login_code_email(email, code)
+        await state.update_data(email=email)
+        await LinkEmail.waiting_for_code.set()
+        await message.answer(
+            f"📧 Код отправлен на <b>{email}</b>\n\n"
+            "Введите 6-значный код из письма:",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Ошибка привязки email: {e}")
+        await message.answer("❌ Ошибка. Проверьте настройки SMTP или попробуйте позже.")
+        await state.finish()
+    finally:
+        session.close()
+
+
+async def process_link_email_code(message: types.Message, state: FSMContext):
+    if not message.text:
+        await message.answer("❌ Введите код из письма.")
+        return
+    code = message.text.strip().replace(" ", "")
+    if len(code) != 6 or not code.isdigit():
+        await message.answer("❌ Введите 6-значный код.")
+        return
+    data = await state.get_data()
+    email = data.get("email", "")
+    if not email:
+        await message.answer("❌ Сессия истекла. Начните заново: /start")
+        await state.finish()
+        return
+    session = SessionLocal()
+    try:
+        from datetime import datetime, timezone
+
+        user = session.query(User).filter(User.user_id == message.from_user.id, User.email == email).first()
+        if not user:
+            await message.answer("❌ Ошибка. Начните заново: /start")
+            await state.finish()
+            return
+        if user.email_verification_code != code:
+            await message.answer("❌ Неверный код. Проверьте и введите снова.")
+            return
+        now = datetime.now(timezone.utc)
+        if user.email_verification_expires_at and user.email_verification_expires_at < now:
+            await message.answer("❌ Код истёк. Начните заново: нажмите «Привязать email».")
+            await state.finish()
+            return
+        user.email_verified = True
+        user.email_verification_code = None
+        user.email_verification_expires_at = None
+        session.commit()
+
+        from utils.menu_manager import get_menu_manager
+        menu_manager = get_menu_manager()
+        await menu_manager.return_to_menu(
+            message, state,
+            f"✅ Email <b>{email}</b> успешно привязан!\n\nТеперь вы можете входить на веб-портал судей.",
+            None
+        )
+    finally:
+        session.close()
         await state.finish()
 
 
