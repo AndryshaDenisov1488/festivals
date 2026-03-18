@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
-import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2 } from 'lucide-react'
+import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Budget = {
@@ -63,6 +63,7 @@ export default function AdminPage() {
   const [regsFilter, setRegsFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('pending')
   const [regsMonthFilter, setRegsMonthFilter] = useState<MonthFilterValue>('future')
   const [regsSearch, setRegsSearch] = useState('')
+  const [expandedTournamentIds, setExpandedTournamentIds] = useState<Set<number>>(new Set())
   const [budgetsMonthFilter, setBudgetsMonthFilter] = useState<MonthFilterValue>('future')
 
   const [exportMonth, setExportMonth] = useState('')
@@ -219,6 +220,33 @@ export default function AdminPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
+  }
+
+  const regsByTournament = useMemo(() => {
+    const map = new Map<number, { tournament_name: string; tournament_date: string; tournament_month: string; regs: AdminRegistration[] }>()
+    for (const r of registrations) {
+      const existing = map.get(r.tournament_id)
+      if (existing) {
+        existing.regs.push(r)
+      } else {
+        map.set(r.tournament_id, {
+          tournament_name: r.tournament_name,
+          tournament_date: r.tournament_date,
+          tournament_month: r.tournament_month,
+          regs: [r]
+        })
+      }
+    }
+    return Array.from(map.entries()).map(([tournament_id, data]) => ({ tournament_id, ...data }))
+  }, [registrations])
+
+  const toggleTournamentExpand = (id: number) => {
+    setExpandedTournamentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const handleApprove = async (r: AdminRegistration) => {
@@ -768,45 +796,77 @@ export default function AdminPage() {
           <div className="py-4 text-center text-slate-500">Загрузка...</div>
         ) : (
           <div className="space-y-2">
-            {registrations.map((r) => (
-              <div
-                key={r.registration_id}
-                className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium">{r.tournament_name}</p>
-                  <p className="text-sm text-slate-500">
-                    {r.user_name} · {r.tournament_date}
-                  </p>
-                  <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${
-                    r.status === 'approved' ? 'bg-green-100 text-green-800' :
-                    r.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    'bg-amber-100 text-amber-800'
-                  }`}>
-                    {r.status === 'pending' ? 'На рассмотрении' : r.status === 'approved' ? 'Одобрена' : 'Отклонена'}
-                  </span>
+            {regsByTournament.map(({ tournament_id, tournament_name, tournament_date, tournament_month, regs }) => {
+              const isExpanded = expandedTournamentIds.has(tournament_id)
+              const pendingCount = regs.filter((r) => r.status === 'pending').length
+              return (
+                <div key={tournament_id} className="overflow-hidden rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => toggleTournamentExpand(tournament_id)}
+                    className="flex w-full items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
+                    aria-expanded={isExpanded}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 shrink-0 text-slate-500" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-800">{tournament_name}</p>
+                        <p className="text-sm text-slate-500">
+                          {tournament_date} · {tournament_month} · {regs.length} {regs.length === 1 ? 'заявка' : regs.length < 5 ? 'заявки' : 'заявок'}
+                          {pendingCount > 0 && (
+                            <span className="ml-1 text-amber-600">({pendingCount} на рассмотрении)</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t border-slate-200 bg-white">
+                      {regs.map((r) => (
+                        <div
+                          key={r.registration_id}
+                          className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="pl-8">
+                            <p className="font-medium text-slate-800">{r.user_name}</p>
+                            <span className={`inline-block rounded px-2 py-0.5 text-xs ${
+                              r.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              r.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {r.status === 'pending' ? 'На рассмотрении' : r.status === 'approved' ? 'Одобрена' : 'Отклонена'}
+                            </span>
+                          </div>
+                          {r.status === 'pending' && (
+                            <div className="flex flex-col gap-2 pl-8 sm:flex-row">
+                              <button
+                                onClick={() => handleApprove(r)}
+                                className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white hover:bg-green-700"
+                              >
+                                <Check className="h-4 w-4" />
+                                Одобрить
+                              </button>
+                              <button
+                                onClick={() => handleReject(r)}
+                                className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg border border-red-300 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <X className="h-4 w-4" />
+                                Отклонить
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {r.status === 'pending' && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <button
-                      onClick={() => handleApprove(r)}
-                      className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white hover:bg-green-700"
-                    >
-                      <Check className="h-4 w-4" />
-                      Одобрить
-                    </button>
-                    <button
-                      onClick={() => handleReject(r)}
-                      className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg border border-red-300 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      <X className="h-4 w-4" />
-                      Отклонить
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {registrations.length === 0 && (
+              )
+            })}
+            {regsByTournament.length === 0 && (
               <p className="py-4 text-center text-slate-500">Нет заявок</p>
             )}
           </div>
