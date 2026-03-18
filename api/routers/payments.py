@@ -102,11 +102,21 @@ def earnings_summary(
         rating = "🥈 Серебряный судья"
     elif total >= 10:
         rating = "🥉 Бронзовый судья"
+
+    progress_to_next = None
+    if total < 10:
+        progress_to_next = {"current": total, "target": 10, "next_label": "🥉 Бронзовый судья"}
+    elif total < 25:
+        progress_to_next = {"current": total, "target": 25, "next_label": "🥈 Серебряный судья"}
+    elif total < 50:
+        progress_to_next = {"current": total, "target": 50, "next_label": "🥇 Золотой судья"}
+
     return {
         "total_tournaments": total,
         "total_amount": amount,
         "average_amount": amount / total if total else 0,
         "rating": rating,
+        "progress_to_next": progress_to_next,
     }
 
 

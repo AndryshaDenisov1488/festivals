@@ -799,7 +799,18 @@ async def process_earnings_detailed(callback_query: types.CallbackQuery, state: 
         message += "📅 <b>Заработок по месяцам:</b>\n"
         for month, total_amount, tournaments_count in earnings_data['monthly_earnings']:
             message += f"• {month}: {total_amount:.2f} руб. ({tournaments_count} турниров)\n"
-    
+
+    # Рейтинг и прогресс
+    total = earnings_data['total_tournaments']
+    if total >= 50:
+        message += "\n🎖️ <b>Рейтинг:</b> 🥇 Золотой судья"
+    elif total >= 25:
+        message += f"\n🎖️ <b>Рейтинг:</b> 🥈 Серебряный судья · До 🥇 Золотого: {total}/50"
+    elif total >= 10:
+        message += f"\n🎖️ <b>Рейтинг:</b> 🥉 Бронзовый судья · До 🥈 Серебряного: {total}/25"
+    else:
+        message += f"\n🎖️ <b>Рейтинг:</b> ⭐ Начинающий судья · До 🥉 Бронзового: {total}/10"
+
     # Разбиваем длинное сообщение на части
     from services.excel_export import split_text
     chunks = split_text(message, MAX_MESSAGE_LENGTH)
@@ -831,21 +842,26 @@ async def process_earnings_summary(callback_query: types.CallbackQuery, state: F
         )
     else:
         # Определяем рейтинг судьи
-        if earnings_data['total_tournaments'] >= 50:
+        total = earnings_data['total_tournaments']
+        if total >= 50:
             rating = "🥇 Золотой судья"
-        elif earnings_data['total_tournaments'] >= 25:
+            progress_line = ""
+        elif total >= 25:
             rating = "🥈 Серебряный судья"
-        elif earnings_data['total_tournaments'] >= 10:
+            progress_line = f"\n📊 До 🥇 Золотого судьи: {total}/50 турниров"
+        elif total >= 10:
             rating = "🥉 Бронзовый судья"
+            progress_line = f"\n📊 До 🥈 Серебряного судьи: {total}/25 турниров"
         else:
             rating = "⭐ Начинающий судья"
-        
+            progress_line = f"\n📊 До 🥉 Бронзового судьи: {total}/10 турниров"
+
         message = (
             "📈 <b>Краткий обзор</b>\n\n"
-            f"🏆 <b>Отсужено турниров:</b> {earnings_data['total_tournaments']}\n"
+            f"🏆 <b>Отсужено турниров:</b> {total}\n"
             f"💰 <b>Общий заработок:</b> {earnings_data['total_amount']:.2f} руб.\n"
-            f"📊 <b>Средний заработок:</b> {earnings_data['total_amount'] / earnings_data['total_tournaments']:.2f} руб./турнир\n\n"
-            f"🎖️ <b>Ваш рейтинг:</b> {rating}\n\n"
+            f"📊 <b>Средний заработок:</b> {earnings_data['total_amount'] / total:.2f} руб./турнир\n\n"
+            f"🎖️ <b>Ваш рейтинг:</b> {rating}{progress_line}\n\n"
             f"💡 Для подробной информации выберите «Заработок подробно»"
         )
         

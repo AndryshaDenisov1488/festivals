@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { Check, Edit2 } from 'lucide-react'
+import { Check, Edit2, Trophy } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Payment = {
@@ -16,7 +16,13 @@ type Payment = {
   payment_date: string | null
 }
 
-type SummaryResponse = { total_amount?: number }
+type ProgressToNext = { current: number; target: number; next_label: string }
+type SummaryResponse = {
+  total_amount?: number
+  total_tournaments?: number
+  rating?: string
+  progress_to_next?: ProgressToNext | null
+}
 
 export default function EarningsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
@@ -86,6 +92,10 @@ export default function EarningsPage() {
             : p
         )
       )
+      const token = localStorage.getItem('token')
+      if (token) {
+        api<SummaryResponse>('/api/v1/earnings/my/summary', { token }).then(setSummary).catch(() => {})
+      }
       setModalPayment(null)
       setConfirmAmount('')
     } catch (err) {
@@ -151,10 +161,50 @@ export default function EarningsPage() {
           className="min-h-[44px] max-w-md rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
       </div>
-      {summary?.total_amount != null && (
-        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-500">Итого</p>
-          <p className="text-2xl font-semibold text-slate-800">{summary.total_amount} ₽</p>
+      {/* Summary + Achievements */}
+      {summary && (
+        <div className="mb-6 space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-sm text-slate-500">Итого</p>
+            <p className="text-2xl font-semibold text-slate-800">{summary.total_amount ?? 0} ₽</p>
+            {summary.total_tournaments != null && (
+              <p className="mt-1 text-sm text-slate-600">за {summary.total_tournaments} турниров</p>
+            )}
+          </div>
+          {(summary.rating || summary.progress_to_next) && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-sm">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-amber-800">
+                <Trophy className="h-4 w-4" />
+                Достижения
+              </h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {summary.rating && (
+                  <span className="font-semibold text-amber-800">{summary.rating}</span>
+                )}
+                {summary.progress_to_next && (
+                  <div className="min-w-[200px]">
+                    <p className="mb-1 text-xs text-slate-600">
+                      До {summary.progress_to_next.next_label}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-600"
+                          style={{ width: `${Math.min(100, (summary.progress_to_next.current / summary.progress_to_next.target) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-mono font-medium text-slate-700">
+                        {summary.progress_to_next.current}/{summary.progress_to_next.target}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {!summary.progress_to_next && summary.rating && (
+                  <p className="text-sm text-amber-700">Максимальный статус достигнут</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

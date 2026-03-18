@@ -23,11 +23,18 @@ type UserInfo = {
   function?: string
 }
 
+type ProgressToNext = {
+  current: number
+  target: number
+  next_label: string
+}
+
 type EarningsSummary = {
   total_amount?: number
   total_tournaments?: number
   average_amount?: number
   rating?: string
+  progress_to_next?: ProgressToNext | null
 }
 
 type EarningsDetail = {
@@ -183,9 +190,24 @@ export default function DashboardPage() {
           </p>
         </div>
         {earnings?.rating && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
-            <Zap className="h-5 w-5 text-amber-600" />
-            <span className="font-semibold text-amber-800">{earnings.rating}</span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
+              <Zap className="h-5 w-5 text-amber-600" />
+              <span className="font-semibold text-amber-800">{earnings.rating}</span>
+            </div>
+            {earnings.progress_to_next && (
+              <div className="flex min-w-[200px] flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2">
+                <span className="text-xs font-medium text-slate-600">
+                  До {earnings.progress_to_next.next_label}: {earnings.progress_to_next.current}/{earnings.progress_to_next.target} турниров
+                </span>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all"
+                    style={{ width: `${Math.min(100, (earnings.progress_to_next.current / earnings.progress_to_next.target) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -228,6 +250,45 @@ export default function DashboardPage() {
           size="md"
         />
       </div>
+
+      {/* Achievements / Progress */}
+      {(earnings?.rating || earnings?.progress_to_next) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-5 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-amber-800">
+            <Trophy className="h-4 w-4" />
+            Достижения
+          </h2>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-amber-800">{earnings?.rating ?? '—'}</span>
+              <span className="text-sm text-slate-600">
+                {earnings?.total_tournaments ?? 0} оплаченных турниров
+              </span>
+            </div>
+            {earnings?.progress_to_next && (
+              <div className="min-w-[240px]">
+                <p className="mb-1 text-xs font-medium text-slate-600">
+                  Прогресс до {earnings.progress_to_next.next_label}
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-600"
+                      style={{ width: `${Math.min(100, (earnings.progress_to_next.current / earnings.progress_to_next.target) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-mono font-medium text-slate-700">
+                    {earnings.progress_to_next.current}/{earnings.progress_to_next.target}
+                  </span>
+                </div>
+              </div>
+            )}
+            {!earnings?.progress_to_next && earnings?.rating && (
+              <p className="text-sm font-medium text-amber-700">Максимальный статус достигнут</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Second row: payments breakdown + next tournament */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

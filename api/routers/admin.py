@@ -540,6 +540,8 @@ def admin_earnings_list(
                     "user_id": user.user_id,
                     "user_name": f"{user.first_name} {user.last_name}",
                     "email": user.email or "",
+                    "function": user.function or "",
+                    "category": user.category or "",
                     "total_tournaments": 0,
                     "with_amount": 0,
                     "without_amount": 0,
@@ -591,6 +593,45 @@ def admin_earnings_list(
 
 class EarningsRequestIn(BaseModel):
     payment_ids: list[int]
+
+
+class AdminPaymentAmountIn(BaseModel):
+    amount: float
+
+
+@router.patch("/earnings/payment/{payment_id}")
+async def admin_set_payment_amount(
+    payment_id: int,
+    payload: AdminPaymentAmountIn,
+    admin: User = Depends(get_current_admin),
+):
+    """Админ вводит заработок судьи за турнир."""
+    if payload.amount < 0:
+        raise HTTPException(status_code=400, detail="Сумма не может быть отрицательной")
+    db = SessionLocal()
+    try:
+        payment = (
+            db.query(JudgePayment)
+            .filter(JudgePayment.payment_id == payment_id)
+            .first()
+        )
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        reg = db.query(Registration).filter(
+            Registration.user_id == payment.user_id,
+            Registration.tournament_id == payment.tournament_id,
+            Registration.status == RegistrationStatus.APPROVED,
+        ).first()
+        if not reg:
+            raise HTTPException(status_code=400, detail="Регистрация не утверждена или отменена")
+        payment.amount = payload.amount
+        db.commit()
+        from services.budget_service import get_budget_service
+        budget_service = get_budget_service(None)
+        await budget_service.update_judges_payment(payment.tournament_id)
+        return {"ok": True, "amount": payment.amount}
+    finally:
+        db.close()
 
 
 @router.post("/earnings/request")

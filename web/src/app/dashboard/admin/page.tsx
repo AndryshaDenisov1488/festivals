@@ -74,6 +74,8 @@ export default function AdminPage() {
     user_id: number
     user_name: string
     email: string
+    function?: string
+    category?: string
     total_tournaments: number
     with_amount: number
     without_amount: number
@@ -98,6 +100,9 @@ export default function AdminPage() {
   const [expandedEarningsIds, setExpandedEarningsIds] = useState<Set<number>>(new Set())
   const [expandedEarningsSumIds, setExpandedEarningsSumIds] = useState<Set<number>>(new Set())
   const [earningsRequestLoading, setEarningsRequestLoading] = useState<number | null>(null)
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null)
+  const [editingPaymentValue, setEditingPaymentValue] = useState('')
+  const [savingPaymentId, setSavingPaymentId] = useState<number | null>(null)
 
   const [resultToast, setResultToast] = useState<{
     type: 'approved' | 'rejected'
@@ -431,10 +436,32 @@ export default function AdminPage() {
         token
       })
       showSuccess('Запрос отправлен судье')
+      loadEarnings()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setEarningsRequestLoading(null)
+    }
+  }
+
+  const handleSetPaymentAmount = async (paymentId: number) => {
+    const num = parseFloat(editingPaymentValue.replace(',', '.'))
+    if (isNaN(num) || num < 0 || !token) return
+    setSavingPaymentId(paymentId)
+    try {
+      await api(`/api/v1/admin/earnings/payment/${paymentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ amount: num }),
+        token
+      })
+      setEditingPaymentId(null)
+      setEditingPaymentValue('')
+      showSuccess('Заработок сохранён')
+      loadEarnings()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setSavingPaymentId(null)
     }
   }
 
@@ -834,7 +861,12 @@ export default function AdminPage() {
           <div className="py-4 text-center text-slate-500">Загрузка...</div>
         ) : (
           <div className="space-y-2">
-            {earnings.map((j) => {
+            {earnings.map((j, idx) => {
+              const rank = idx + 1
+              const rankLabel = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`
+              const paidCount = j.with_amount
+              const statusLabel = paidCount >= 50 ? '🥇 Золотой судья' : paidCount >= 25 ? '🥈 Серебряный судья' : paidCount >= 10 ? '🥉 Бронзовый судья' : '⭐ Начинающий судья'
+              const progressToNext = paidCount < 10 ? { current: paidCount, target: 10, next: 'Бронзовый' } : paidCount < 25 ? { current: paidCount, target: 25, next: 'Серебряный' } : paidCount < 50 ? { current: paidCount, target: 50, next: 'Золотой' } : null
               const isExpanded = expandedEarningsIds.has(j.user_id)
               const isSumExpanded = expandedEarningsSumIds.has(j.user_id)
               const monthlyMap = j.tournaments.reduce<Record<string, { sum: number; count: number }>>((acc, t) => {
@@ -876,7 +908,23 @@ export default function AdminPage() {
                       >
                         {isExpanded ? <ChevronDown className="h-5 w-5 text-slate-500" /> : <ChevronRight className="h-5 w-5 text-slate-500" />}
                         <span className="font-medium text-slate-800">{j.user_name}</span>
+                        {(j.function || j.category) && (
+                          <span className="text-xs text-slate-500">
+                            {[j.function, j.category].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
                       </button>
+                      <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-800" title="Рейтинг по заработку">
+                        {rankLabel}
+                      </span>
+                      <span className="rounded bg-slate-200 px-2 py-0.5 text-sm font-medium text-slate-700" title="Статус по количеству турниров">
+                        {statusLabel}
+                      </span>
+                      {progressToNext && (
+                        <span className="text-xs text-slate-500" title={`До ${progressToNext.next} судьи`}>
+                          {progressToNext.current}/{progressToNext.target}
+                        </span>
+                      )}
                       <span className="text-sm text-slate-500">
                         Турниров: {j.total_tournaments} · Указано: {j.with_amount} · Не указано: {j.without_amount}
                       </span>
@@ -924,18 +972,65 @@ export default function AdminPage() {
                               {t.tournament_date} · {t.tournament_month}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 pl-8">
-                            {t.amount != null ? (
-                              <span className="font-medium text-emerald-700">{t.amount.toFixed(0)} ₽</span>
+                          <div className="flex flex-wrap items-center gap-2 pl-8">
+                            {editingPaymentId === t.payment_id ? (
+                              <>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={100}
+                                  value={editingPaymentValue}
+                                  onChange={(e) => setEditingPaymentValue(e.target.value)}
+                                  placeholder="Сумма ₽"
+                                  className="w-28 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                                  aria-label="Сумма заработка"
+                                />
+                                <button
+                                  onClick={() => handleSetPaymentAmount(t.payment_id)}
+                                  disabled={savingPaymentId !== null}
+                                  className="rounded bg-emerald-600 px-2 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                  {savingPaymentId === t.payment_id ? 'Сохранение...' : 'Сохранить'}
+                                </button>
+                                <button
+                                  onClick={() => { setEditingPaymentId(null); setEditingPaymentValue('') }}
+                                  disabled={savingPaymentId !== null}
+                                  className="rounded border px-2 py-1.5 text-sm"
+                                >
+                                  Отмена
+                                </button>
+                              </>
+                            ) : t.amount != null ? (
+                              <>
+                                <span className="font-medium text-emerald-700">{t.amount.toFixed(0)} ₽</span>
+                                <button
+                                  onClick={() => { setEditingPaymentId(t.payment_id); setEditingPaymentValue(String(t.amount)) }}
+                                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                  aria-label="Изменить"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Изменить
+                                </button>
+                              </>
                             ) : (
-                              <button
-                                onClick={() => handleEarningsRequest([t.payment_id])}
-                                disabled={earningsRequestLoading !== null}
-                                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-                              >
-                                <Mail className="h-4 w-4" />
-                                {earningsRequestLoading === t.payment_id ? 'Отправка...' : 'Отправить запрос'}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => { setEditingPaymentId(t.payment_id); setEditingPaymentValue('') }}
+                                  className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                  aria-label="Ввести"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Ввести
+                                </button>
+                                <button
+                                  onClick={() => handleEarningsRequest([t.payment_id])}
+                                  disabled={earningsRequestLoading !== null}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  <Mail className="h-4 w-4" />
+                                  {earningsRequestLoading === t.payment_id ? 'Отправка...' : 'Отправить запрос'}
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
