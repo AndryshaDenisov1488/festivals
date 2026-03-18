@@ -121,6 +121,8 @@ sudo cp deploy/judges-web.service /etc/systemd/system/
 # Замени YOUR_USER и путь (для root: /home/root → /root)
 sudo sed -i 's/YOUR_USER/your_username/g' /etc/systemd/system/judges-*.service
 sudo sed -i 's|/home/your_username|/root|g' /etc/systemd/system/judges-*.service   # если пользователь root
+
+# Важно: judges-web запускается из web/.next/standalone — там лежат статика и server.js
 ```
 
 Запуск:
@@ -177,3 +179,28 @@ sudo nginx -t && sudo systemctl reload nginx
 - `GET /api/v1/admin/exports/year?year=...` — экспорт Excel по году
 
 Документация: `http://IP:8101/docs` (или https://festsfs.ru/docs через nginx)
+
+## Устранение неполадок
+
+### 404 на статике Next.js (/_next/static/...)
+
+Сервер должен запускаться **из директории** `web/.next/standalone`, а не из `web/`. Проверь:
+
+1. **Systemd** — в `judges-web.service` должно быть:
+   - `WorkingDirectory=.../web/.next/standalone`
+   - `ExecStart=/usr/bin/node server.js`
+
+2. **Проверка после сборки:**
+   ```bash
+   cd web
+   npm run build
+   ls -la .next/standalone/.next/static/chunks/   # должны быть .js файлы
+   ```
+
+3. **Локальный запуск:**
+   ```bash
+   cd web
+   npm start   # запускает из standalone
+   ```
+
+4. **basePath** — если `NEXT_PUBLIC_BASE_PATH=/test`, статика доступна по `/test/_next/static/...`, а не по `/_next/static/...`.

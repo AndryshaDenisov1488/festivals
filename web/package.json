@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/postbuild.js",
-    "start": "node .next/standalone/server.js",
+    "build": "next build && node scripts/postbuild.js && node scripts/verify-standalone.js",
+    "start": "cd .next/standalone && node server.js",
     "lint": "next lint"
   },
   "dependencies": {
