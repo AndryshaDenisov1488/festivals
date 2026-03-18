@@ -98,8 +98,9 @@ sudo cp deploy/judges-bot.service /etc/systemd/system/
 sudo cp deploy/judges-api.service /etc/systemd/system/
 sudo cp deploy/judges-web.service /etc/systemd/system/
 
-# Замени YOUR_USER на реальный путь
+# Замени YOUR_USER и путь (для root: /home/root → /root)
 sudo sed -i 's/YOUR_USER/your_username/g' /etc/systemd/system/judges-*.service
+sudo sed -i 's|/home/your_username|/root|g' /etc/systemd/system/judges-*.service   # если пользователь root
 ```
 
 Запуск:
