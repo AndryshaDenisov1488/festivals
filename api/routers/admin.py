@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
 from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
@@ -513,6 +513,14 @@ def admin_earnings_list(
             db.query(User, JudgePayment, Tournament)
             .join(JudgePayment, JudgePayment.user_id == User.user_id)
             .join(Tournament, JudgePayment.tournament_id == Tournament.tournament_id)
+            .join(
+                Registration,
+                and_(
+                    Registration.user_id == JudgePayment.user_id,
+                    Registration.tournament_id == JudgePayment.tournament_id,
+                    Registration.status == RegistrationStatus.APPROVED,
+                ),
+            )
         )
         if future_only:
             q = q.filter(Tournament.date >= get_today())
@@ -561,9 +569,22 @@ def admin_earnings_list(
                     "tournament_date": format_date(tournament.date),
                 })
         result = list(by_user.values())
+
+        def parse_date_for_sort(s: Optional[str]) -> tuple[int, int, int]:
+            if not s:
+                return (0, 0, 0)
+            parts = s.split(".")
+            if len(parts) != 3:
+                return (0, 0, 0)
+            try:
+                return (int(parts[2]), int(parts[1]), int(parts[0]))
+            except (ValueError, IndexError):
+                return (0, 0, 0)
+
         for r in result:
-            r["tournaments"].sort(key=lambda x: x["tournament_date"] or "", reverse=True)
-        return sorted(result, key=lambda x: x["user_name"])
+            r["tournaments"].sort(key=lambda x: parse_date_for_sort(x.get("tournament_date")))
+
+        return sorted(result, key=lambda x: (-x["total_amount"], x["user_name"]))
     finally:
         db.close()
 

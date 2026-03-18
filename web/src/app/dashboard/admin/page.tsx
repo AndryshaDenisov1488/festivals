@@ -64,7 +64,7 @@ export default function AdminPage() {
   const [regsMonthFilter, setRegsMonthFilter] = useState<MonthFilterValue>('future')
   const [regsSearch, setRegsSearch] = useState('')
   const [expandedTournamentIds, setExpandedTournamentIds] = useState<Set<number>>(new Set())
-  const [budgetsMonthFilter, setBudgetsMonthFilter] = useState<MonthFilterValue>('future')
+  const [budgetsMonthFilter, setBudgetsMonthFilter] = useState<MonthFilterValue>('all')
 
   const [exportMonth, setExportMonth] = useState('')
   const [exportYear, setExportYear] = useState('')
@@ -845,8 +845,21 @@ export default function AdminPage() {
                 acc[m].count += 1
                 return acc
               }, {})
+              const seasonSortKey = (mm: string, yy: string) => {
+                const m = parseInt(mm || '1', 10)
+                const y = parseInt(yy || '0', 10)
+                const seasonYear = m >= 7 ? y : y - 1
+                const seasonMonth = (m - 7 + 12) % 12
+                return [seasonYear, seasonMonth]
+              }
               const monthlyList = Object.entries(monthlyMap)
-                .sort((a, b) => a[0].localeCompare(b[0]))
+                .sort((a, b) => {
+                  const [mmA, yyA] = a[0].split('.')
+                  const [mmB, yyB] = b[0].split('.')
+                  const [syA, smA] = seasonSortKey(mmA, yyA)
+                  const [syB, smB] = seasonSortKey(mmB, yyB)
+                  return syA !== syB ? syA - syB : smA - smB
+                })
                 .map(([k, v]) => {
                   const [mm, yy] = k.split('.')
                   const monthName = MONTH_NAMES[parseInt(mm || '1', 10) - 1] || mm

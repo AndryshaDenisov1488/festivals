@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("")
 async def list_budgets(
     month: Optional[str] = Query(None),
-    future_only: bool = Query(True, description="Только будущие турниры"),
+    future_only: bool = Query(False, description="Только будущие турниры"),
     admin: User = Depends(get_current_admin),
 ):
     from datetime import date
