@@ -367,8 +367,9 @@ async def admin_create_tournament(
         db.add(t)
         db.commit()
         db.refresh(t)
-        from services.payment_system import get_payment_system
-        await get_payment_system(None).create_payment_records(t.tournament_id)
+        from services.payment_system import PaymentSystem
+        ps = PaymentSystem(bot=None)
+        await ps.create_payment_records(t.tournament_id)
         if BOT_TOKEN:
             try:
                 from aiogram import Bot
