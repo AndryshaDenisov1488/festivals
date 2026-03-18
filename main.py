@@ -23,7 +23,7 @@ from handlers.common_handlers import (
 )
 from handlers.user_handlers import (
     process_sign_up, process_month, process_tournament, setup_main_menu_button_handlers,
-    link_email_step, process_link_email_input, process_link_email_code,
+    cmd_link_email, link_email_step, process_link_email_input, process_link_email_code,
     process_cancel_registration, process_cancel_reg_month, process_cancel_reg_id,
     process_confirm_cancel, process_cancel_action,
     my_registrations_step, process_my_registrations_month,
@@ -230,6 +230,7 @@ logger.info("Registering handlers...")
 
 # /start + регистрация судьи (message-handlers)
 dp.register_message_handler(cmd_start, commands=["start"], state="*")
+dp.register_message_handler(cmd_link_email, commands=["link_email"], state="*")
 dp.register_message_handler(process_first_name, state=RegisterReferee.waiting_for_first_name)
 dp.register_message_handler(process_last_name, state=RegisterReferee.waiting_for_last_name)
 dp.register_message_handler(process_function, state=RegisterReferee.waiting_for_function)

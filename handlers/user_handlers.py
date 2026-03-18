@@ -172,6 +172,31 @@ async def process_edit_profile_category(message: types.Message, state: FSMContex
 
 
 # ======== Привязка email (для входа на веб-портал) ========
+async def cmd_link_email(message: types.Message, state: FSMContext):
+    """Команда /link_email — то же, что кнопка «Привязать email» (удобно для рассылки)"""
+    session = SessionLocal()
+    try:
+        user = session.query(User).filter(User.user_id == message.from_user.id).first()
+        if not user:
+            await message.answer("❌ Вы не зарегистрированы в системе.")
+            return
+        if user.email and getattr(user, "email_verified", False):
+            await message.answer(
+                f"✅ Email уже привязан: <code>{user.email}</code>\n\n"
+                "Вы можете входить на веб-портал по этому адресу.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        await message.answer(
+            "📧 Введите ваш <b>email</b> для входа на веб-портал судей:\n\n"
+            "Код подтверждения будет отправлен на указанный адрес.",
+            parse_mode=ParseMode.HTML
+        )
+        await LinkEmail.waiting_for_email.set()
+    finally:
+        session.close()
+
+
 async def link_email_step(callback_query: types.CallbackQuery, state: FSMContext):
     session = SessionLocal()
     try:
