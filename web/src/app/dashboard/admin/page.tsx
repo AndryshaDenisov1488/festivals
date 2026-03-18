@@ -34,6 +34,12 @@ type AdminUser = {
   category: string
   email: string | null
   is_blocked: boolean
+  regs_approved?: number
+  regs_pending?: number
+  regs_rejected?: number
+  regs_total?: number
+  approved_pct?: number
+  rejected_pct?: number
 }
 
 type AdminTournament = {
@@ -699,6 +705,7 @@ export default function AdminPage() {
                   <th className="px-2 py-2 text-left">Функция</th>
                   <th className="px-2 py-2 text-left">Категория</th>
                   <th className="px-2 py-2 text-left">Email</th>
+                  <th className="px-2 py-2 text-left">Заявки</th>
                   <th className="px-2 py-2 text-left">Статус</th>
                   <th className="px-2 py-2 text-right">Действия</th>
                 </tr>
@@ -710,6 +717,22 @@ export default function AdminPage() {
                     <td className="px-2 py-2 text-slate-600">{u.function}</td>
                     <td className="px-2 py-2 text-slate-600">{u.category}</td>
                     <td className="px-2 py-2 text-slate-600">{u.email || '—'}</td>
+                    <td className="px-2 py-2" title="Одобрено / На рассмотрении / Отклонено · % одобрения · % отказов">
+                      {(u.regs_total ?? 0) > 0 ? (
+                        <span className="text-slate-700">
+                          <span className="text-emerald-600 font-medium">{u.regs_approved ?? 0}</span>
+                          <span className="text-slate-400"> / </span>
+                          <span className="text-amber-600">{u.regs_pending ?? 0}</span>
+                          <span className="text-slate-400"> / </span>
+                          <span className="text-red-600 font-medium">{u.regs_rejected ?? 0}</span>
+                          <span className="ml-1 text-xs text-slate-500">
+                            ({u.approved_pct ?? 0}% ✓ · {u.rejected_pct ?? 0}% ✕)
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-2 py-2">
                       {u.is_blocked ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-800">Заблокирован</span> : <span className="text-slate-500">Активен</span>}
                     </td>

@@ -136,6 +136,7 @@ export default function DashboardPage() {
   const [detail, setDetail] = useState<EarningsDetail | null>(null)
   const [payments, setPayments] = useState<Payment[]>([])
   const [regs, setRegs] = useState<Registration[]>([])
+  const [regsAll, setRegsAll] = useState<Registration[]>([])
   const [tours, setTours] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -148,19 +149,29 @@ export default function DashboardPage() {
       api<EarningsDetail>('/api/v1/earnings/my/detail', { token }).catch(() => null),
       api<Payment[]>('/api/v1/earnings/my/payments?future_only=false', { token }).catch(() => []),
       api<Registration[]>('/api/v1/registrations/my?future_only=true', { token }).catch(() => []),
+      api<Registration[]>('/api/v1/registrations/my?future_only=false', { token }).catch(() => []),
       api<Tournament[]>('/api/v1/tournaments?future_only=true', { token }).catch(() => [])
-    ]).then(([u, e, d, p, r, t]) => {
+    ]).then(([u, e, d, p, r, regsAll, t]) => {
       setUser(u ?? null)
       setEarnings(e ?? null)
       setDetail(d ?? null)
       setPayments(Array.isArray(p) ? p : [])
       setRegs(Array.isArray(r) ? r : [])
+      setRegsAll(Array.isArray(regsAll) ? regsAll : [])
       setTours(Array.isArray(t) ? t : [])
     }).finally(() => setLoading(false))
   }, [])
 
   const pendingCount = regs.filter((r) => r.status === 'pending').length
   const approvedCount = regs.filter((r) => r.status === 'approved').length
+  const regsStats = {
+    approved: regsAll.filter((r) => r.status === 'approved').length,
+    pending: regsAll.filter((r) => r.status === 'pending').length,
+    rejected: regsAll.filter((r) => r.status === 'rejected').length
+  }
+  const regsTotal = regsStats.approved + regsStats.pending + regsStats.rejected
+  const regsApprovedPct = regsTotal > 0 ? Math.round((regsStats.approved / regsTotal) * 100) : 0
+  const regsRejectedPct = regsTotal > 0 ? Math.round((regsStats.rejected / regsTotal) * 100) : 0
   const paidCount = payments.filter((p) => p.is_paid).length
   const unpaidCount = payments.filter((p) => !p.is_paid).length
   const totalPaid = payments.filter((p) => p.is_paid).reduce((s, p) => s + (p.amount ?? 0), 0)
@@ -287,6 +298,68 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-amber-700">Максимальный статус достигнут</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Registration stats & chart */}
+      {regsTotal > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-600">
+            <ClipboardList className="h-4 w-4" />
+            Статистика по заявкам
+          </h2>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-4">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2">
+                <span className="text-xs font-medium text-emerald-700">Одобрено</span>
+                <p className="font-mono text-xl font-bold text-slate-800">{regsStats.approved}</p>
+                <span className="text-xs text-slate-600">{regsApprovedPct}%</span>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
+                <span className="text-xs font-medium text-amber-700">На рассмотрении</span>
+                <p className="font-mono text-xl font-bold text-slate-800">{regsStats.pending}</p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2">
+                <span className="text-xs font-medium text-red-700">Отклонено</span>
+                <p className="font-mono text-xl font-bold text-slate-800">{regsStats.rejected}</p>
+                <span className="text-xs text-slate-600">{regsRejectedPct}%</span>
+              </div>
+            </div>
+            <div className="min-w-[200px] max-w-[320px] flex-1">
+              <p className="mb-2 text-xs font-medium text-slate-600">Распределение по статусам</p>
+              <div className="flex h-8 overflow-hidden rounded-lg border border-slate-200">
+                {regsStats.approved > 0 && (
+                  <div
+                    className="bg-emerald-500"
+                    style={{ width: `${(regsStats.approved / regsTotal) * 100}%` }}
+                    title={`Одобрено: ${regsStats.approved}`}
+                  />
+                )}
+                {regsStats.pending > 0 && (
+                  <div
+                    className="bg-amber-400"
+                    style={{ width: `${(regsStats.pending / regsTotal) * 100}%` }}
+                    title={`На рассмотрении: ${regsStats.pending}`}
+                  />
+                )}
+                {regsStats.rejected > 0 && (
+                  <div
+                    className="bg-red-400"
+                    style={{ width: `${(regsStats.rejected / regsTotal) * 100}%` }}
+                    title={`Отклонено: ${regsStats.rejected}`}
+                  />
+                )}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Всего заявок: {regsTotal}</p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/registrations"
+            className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-slate-200 py-2.5 text-sm text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            Все заявки
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
       )}
 

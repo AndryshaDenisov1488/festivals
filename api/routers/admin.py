@@ -275,8 +275,26 @@ def admin_list_users(
                 lambda u: u.category,
                 lambda u: getattr(u, "email", None) or "",
             )
-        return [
-            {
+        user_ids = [u.user_id for u in users]
+        stats_rows = (
+            db.query(Registration.user_id, Registration.status, func.count(Registration.registration_id).label("cnt"))
+            .filter(Registration.user_id.in_(user_ids))
+            .group_by(Registration.user_id, Registration.status)
+            .all()
+        )
+        by_user: dict[int, dict[str, int]] = {}
+        for uid in user_ids:
+            by_user[uid] = {"approved": 0, "pending": 0, "rejected": 0}
+        for user_id, status, cnt in stats_rows:
+            if status in by_user.get(user_id, {}):
+                by_user[user_id][status] = cnt
+        result = []
+        for u in users:
+            s = by_user.get(u.user_id, {"approved": 0, "pending": 0, "rejected": 0})
+            total = s["approved"] + s["pending"] + s["rejected"]
+            approved_pct = round((s["approved"] / total * 100), 1) if total > 0 else 0
+            rejected_pct = round((s["rejected"] / total * 100), 1) if total > 0 else 0
+            result.append({
                 "user_id": u.user_id,
                 "first_name": u.first_name,
                 "last_name": u.last_name,
@@ -284,9 +302,14 @@ def admin_list_users(
                 "category": u.category,
                 "email": getattr(u, "email", None),
                 "is_blocked": getattr(u, "is_blocked", False),
-            }
-            for u in users
-        ]
+                "regs_approved": s["approved"],
+                "regs_pending": s["pending"],
+                "regs_rejected": s["rejected"],
+                "regs_total": total,
+                "approved_pct": approved_pct,
+                "rejected_pct": rejected_pct,
+            })
+        return result
     finally:
         db.close()
 
