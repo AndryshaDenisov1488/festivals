@@ -94,7 +94,10 @@ def admin_list_registrations(
                 or_(
                     User.first_name.ilike(term),
                     User.last_name.ilike(term),
+                    User.function.ilike(term),
+                    User.category.ilike(term),
                     Tournament.name.ilike(term),
+                    Tournament.month.ilike(term),
                 )
             )
         q = q.order_by(Tournament.date.desc(), Registration.registration_id)
@@ -268,6 +271,8 @@ def admin_list_users(
                     User.first_name.ilike(term),
                     User.last_name.ilike(term),
                     User.function.ilike(term),
+                    User.category.ilike(term),
+                    User.email.ilike(term),
                 )
             )
         users = q.all()

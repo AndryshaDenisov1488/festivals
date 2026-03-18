@@ -33,23 +33,28 @@ export default function EarningsPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    const params = new URLSearchParams()
-    if (monthFilter === 'future') params.set('future_only', 'true')
-    else if (monthFilter === 'all') params.set('future_only', 'false')
-    else params.set('month', monthFilter)
-    if (search.trim()) params.set('search', search.trim())
-    setLoading(true)
-    Promise.all([
-      api<Payment[]>(`/api/v1/earnings/my/payments?${params}`, { token }),
-      api<SummaryResponse>('/api/v1/earnings/my/summary', { token })
-    ])
-      .then(([p, s]) => {
-        setPayments(p ?? [])
-        setSummary(s ?? null)
-      })
-      .catch(() => setPayments([]))
-      .finally(() => setLoading(false))
-  }, [monthFilter])
+    const load = () => {
+      const params = new URLSearchParams()
+      if (monthFilter === 'future') params.set('future_only', 'true')
+      else if (monthFilter === 'all') params.set('future_only', 'false')
+      else params.set('month', monthFilter)
+      if (search.trim()) params.set('search', search.trim())
+      setLoading(true)
+      Promise.all([
+        api<Payment[]>(`/api/v1/earnings/my/payments?${params}`, { token }),
+        api<SummaryResponse>('/api/v1/earnings/my/summary', { token })
+      ])
+        .then(([p, s]) => {
+          setPayments(p ?? [])
+          setSummary(s ?? null)
+        })
+        .catch(() => setPayments([]))
+        .finally(() => setLoading(false))
+    }
+    const id = search ? setTimeout(load, 200) : null
+    if (!id) load()
+    return () => { if (id) clearTimeout(id) }
+  }, [monthFilter, search])
 
   const handleConfirm = async (payment: Payment) => {
     const amount = parseFloat(confirmAmount)
@@ -139,7 +144,7 @@ export default function EarningsPage() {
         </div>
         <input
           type="search"
-          placeholder="Поиск по названию турнира или месяцу..."
+          placeholder="Поиск: любые буквы подряд..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Поиск выплат"

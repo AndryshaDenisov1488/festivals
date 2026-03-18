@@ -27,17 +27,22 @@ export default function RegistrationsPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    const params = new URLSearchParams()
-    if (monthFilter === 'future') params.set('future_only', 'true')
-    else if (monthFilter === 'all') params.set('future_only', 'false')
-    else params.set('month', monthFilter)
-    if (statusFilter) params.set('status', statusFilter)
-    if (search.trim()) params.set('search', search.trim())
-    setLoading(true)
-    api<Registration[]>(`/api/v1/registrations/my?${params}`, { token })
-      .then(setItems)
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
+    const load = () => {
+      const params = new URLSearchParams()
+      if (monthFilter === 'future') params.set('future_only', 'true')
+      else if (monthFilter === 'all') params.set('future_only', 'false')
+      else params.set('month', monthFilter)
+      if (statusFilter) params.set('status', statusFilter)
+      if (search.trim()) params.set('search', search.trim())
+      setLoading(true)
+      api<Registration[]>(`/api/v1/registrations/my?${params}`, { token })
+        .then(setItems)
+        .catch(() => setItems([]))
+        .finally(() => setLoading(false))
+    }
+    const id = search ? setTimeout(load, 200) : null
+    if (!id) load()
+    return () => { if (id) clearTimeout(id) }
   }, [monthFilter, statusFilter, search])
 
   const handleCancel = async (id: number) => {
@@ -70,7 +75,7 @@ export default function RegistrationsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             type="search"
-            placeholder="Поиск по названию турнира или месяцу..."
+            placeholder="Поиск: любые буквы подряд..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Поиск заявок"

@@ -85,6 +85,7 @@ export default function AdminPage() {
   const [tournamentsSearch, setTournamentsSearch] = useState('')
   const [tournamentsLoading, setTournamentsLoading] = useState(false)
   const [showCreateTournament, setShowCreateTournament] = useState(false)
+  const [activeTab, setActiveTab] = useState<'registrations' | 'tournaments' | 'users' | 'budgets' | 'broadcast' | 'export'>('registrations')
   const [editingTournament, setEditingTournament] = useState<AdminTournament | null>(null)
   const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: 'Апрель' })
 
@@ -153,17 +154,18 @@ export default function AdminPage() {
   }, [token, budgetsMonthFilter])
 
   useEffect(() => {
-    const id = setTimeout(loadRegistrations, regsSearch ? 350 : 0)
+    const id = setTimeout(loadRegistrations, regsSearch ? 200 : 0)
     return () => clearTimeout(id)
   }, [token, regsFilter, regsMonthFilter, regsSearch])
 
   useEffect(() => {
-    const id = setTimeout(loadUsers, usersSearch ? 350 : 0)
+    const id = setTimeout(loadUsers, usersSearch ? 200 : 0)
     return () => clearTimeout(id)
   }, [token, usersSearch])
 
   useEffect(() => {
-    loadTournaments()
+    const id = setTimeout(loadTournaments, tournamentsSearch ? 200 : 0)
+    return () => clearTimeout(id)
   }, [token, tournamentsMonthFilter, tournamentsSearch])
 
   const handleBroadcast = async (e: React.FormEvent) => {
@@ -370,6 +372,31 @@ export default function AdminPage() {
 
       <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">Админ-панель</h1>
 
+      <nav className="flex flex-wrap gap-2 border-b border-slate-200 pb-3" aria-label="Разделы админки">
+        {[
+          { id: 'registrations' as const, label: 'Заявки', icon: ClipboardList },
+          { id: 'tournaments' as const, label: 'Турниры', icon: Trophy },
+          { id: 'users' as const, label: 'Пользователи', icon: Users },
+          { id: 'budgets' as const, label: 'Бюджеты', icon: DollarSign },
+          { id: 'broadcast' as const, label: 'Рассылка', icon: Send },
+          { id: 'export' as const, label: 'Экспорт', icon: FileSpreadsheet }
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex min-h-[44px] items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+              activeTab === id
+                ? 'bg-slate-800 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'broadcast' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 font-medium text-slate-800">
           <Send className="h-5 w-5" />
@@ -398,7 +425,9 @@ export default function AdminPage() {
           )}
         </form>
       </section>
+      )}
 
+      {activeTab === 'tournaments' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="flex items-center gap-2 font-medium text-slate-800">
@@ -418,7 +447,7 @@ export default function AdminPage() {
         </div>
         <input
           type="search"
-          placeholder="Поиск по названию или месяцу..."
+          placeholder="Поиск: любые буквы подряд (андр, никол...)"
           value={tournamentsSearch}
           onChange={(e) => setTournamentsSearch(e.target.value)}
           className="mb-3 min-h-[44px] w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
@@ -471,7 +500,9 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      )}
 
+      {activeTab === 'users' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="flex items-center gap-2 font-medium text-slate-800">
@@ -480,7 +511,7 @@ export default function AdminPage() {
           </h2>
           <input
             type="search"
-            placeholder="Поиск по имени или функции..."
+            placeholder="Поиск: имя, фамилия, функция, email..."
             value={usersSearch}
             onChange={(e) => setUsersSearch(e.target.value)}
             className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
@@ -531,7 +562,9 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      )}
 
+      {activeTab === 'budgets' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="flex items-center gap-2 font-medium text-slate-800">
@@ -614,7 +647,9 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      )}
 
+      {activeTab === 'registrations' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="flex items-center gap-2 font-medium text-slate-800">
@@ -626,7 +661,7 @@ export default function AdminPage() {
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <input
             type="search"
-            placeholder="Поиск по имени судьи или турниру..."
+            placeholder="Поиск: имя, турнир, месяц..."
             value={regsSearch}
             onChange={(e) => setRegsSearch(e.target.value)}
             aria-label="Поиск заявок"
@@ -707,7 +742,9 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      )}
 
+      {activeTab === 'export' && (
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 font-medium text-slate-800">
           <FileSpreadsheet className="h-5 w-5" />
@@ -748,6 +785,7 @@ export default function AdminPage() {
           </div>
         </div>
       </section>
+      )}
 
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditingUser(null)}>

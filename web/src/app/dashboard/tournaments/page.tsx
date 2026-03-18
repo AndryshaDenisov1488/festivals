@@ -28,24 +28,29 @@ export default function TournamentsPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    const params = new URLSearchParams()
-    if (monthFilter === 'future') params.set('future_only', 'true')
-    else if (monthFilter === 'all') params.set('future_only', 'false')
-    else params.set('month', monthFilter)
-    if (search.trim()) params.set('search', search.trim())
-    setLoading(true)
-    Promise.all([
-      api<Tournament[]>(`/api/v1/tournaments?${params}`, { token }),
-      api<MyRegistration[]>(`/api/v1/registrations/my?${params}`, { token })
-    ])
-      .then(([tours, regs]) => {
-        setItems(tours)
-        const map: Record<number, string> = {}
-        regs.forEach((r) => { map[r.tournament_id] = r.status })
-        setMyRegs(map)
-      })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
+    const load = () => {
+      const params = new URLSearchParams()
+      if (monthFilter === 'future') params.set('future_only', 'true')
+      else if (monthFilter === 'all') params.set('future_only', 'false')
+      else params.set('month', monthFilter)
+      if (search.trim()) params.set('search', search.trim())
+      setLoading(true)
+      Promise.all([
+        api<Tournament[]>(`/api/v1/tournaments?${params}`, { token }),
+        api<MyRegistration[]>(`/api/v1/registrations/my?${params}`, { token })
+      ])
+        .then(([tours, regs]) => {
+          setItems(tours)
+          const map: Record<number, string> = {}
+          regs.forEach((r) => { map[r.tournament_id] = r.status })
+          setMyRegs(map)
+        })
+        .catch(() => setItems([]))
+        .finally(() => setLoading(false))
+    }
+    const id = search ? setTimeout(load, 200) : null
+    if (!id) load()
+    return () => { if (id) clearTimeout(id) }
   }, [monthFilter, search])
 
   const handleRegister = async (tournamentId: number) => {
@@ -83,7 +88,7 @@ export default function TournamentsPage() {
         </div>
         <input
           type="search"
-          placeholder="Поиск по названию турнира или месяцу..."
+          placeholder="Поиск: любые буквы подряд..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Поиск турниров"

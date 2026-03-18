@@ -61,7 +61,9 @@ def _base_html(title: str, content: str, accent_color: str = "#0f172a") -> str:
 
 def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> None:
     if not SMTP_HOST or not SMTP_FROM:
-        logger.warning("Email не отправлен: SMTP не настроен (SMTP_HOST=%s, SMTP_FROM=%s)", bool(SMTP_HOST), bool(SMTP_FROM))
+        logger.warning(
+            "Email не отправлен: SMTP не настроен. Добавьте в .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM"
+        )
         return
 
     msg = EmailMessage()
