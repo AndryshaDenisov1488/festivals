@@ -189,7 +189,8 @@ async def cmd_link_email(message: types.Message, state: FSMContext):
             return
         await message.answer(
             "📧 Введите ваш <b>email</b> для входа на веб-портал судей:\n\n"
-            "Код подтверждения будет отправлен на указанный адрес.",
+            "Код подтверждения будет отправлен на указанный адрес.\n\n"
+            "⚠️ Используете Яндекс.Почту? Проверьте папку «Спам» — письмо часто попадает туда.",
             parse_mode=ParseMode.HTML
         )
         await LinkEmail.waiting_for_email.set()
@@ -215,7 +216,8 @@ async def link_email_step(callback_query: types.CallbackQuery, state: FSMContext
             return
         await callback_query.message.answer(
             "📧 Введите ваш <b>email</b> для входа на веб-портал судей:\n\n"
-            "Код подтверждения будет отправлен на указанный адрес.",
+            "Код подтверждения будет отправлен на указанный адрес.\n\n"
+            "⚠️ Используете Яндекс.Почту? Проверьте папку «Спам» — письмо часто попадает туда.",
             parse_mode=ParseMode.HTML
         )
         await LinkEmail.waiting_for_email.set()
@@ -262,7 +264,8 @@ async def process_link_email_input(message: types.Message, state: FSMContext):
         await LinkEmail.waiting_for_code.set()
         await message.answer(
             f"📧 Код отправлен на <b>{email}</b>\n\n"
-            "Введите 6-значный код из письма:",
+            "Введите 6-значный код из письма.\n\n"
+            "⚠️ Яндекс.Почта? Проверьте папку «Спам» — письмо часто попадает туда.",
             parse_mode=ParseMode.HTML
         )
     except Exception as e:

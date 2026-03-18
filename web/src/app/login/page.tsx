@@ -174,6 +174,9 @@ export default function LoginPage() {
                 autoComplete="email"
               />
             </div>
+            <p className="text-xs text-slate-500">
+              Используете Яндекс.Почту? Проверьте папку «Спам» — письмо часто попадает туда.
+            </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               type="submit"
@@ -187,6 +190,9 @@ export default function LoginPage() {
           <form onSubmit={handleVerifyCode} className="space-y-4">
             <p className="text-sm text-slate-600">
               Код отправлен на <strong>{email}</strong>
+            </p>
+            <p className="text-xs text-slate-500">
+              Используете Яндекс.Почту? Проверьте папку «Спам» — письмо часто попадает туда.
             </p>
             <div>
               <label htmlFor="code" className="mb-1 block text-sm font-medium text-slate-600">

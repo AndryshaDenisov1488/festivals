@@ -12,6 +12,7 @@ type Budget = {
   total_budget: number
   judges_payment: number
   admin_profit: number
+  budget_set?: boolean
 }
 
 type AdminRegistration = {
@@ -187,7 +188,7 @@ export default function AdminPage() {
   }
 
   const handleSetBudget = async (tournamentId: number, value: string) => {
-    const num = parseFloat(value)
+    const num = parseFloat(value.replace(',', '.'))
     if (isNaN(num) || num <= 0 || !token) return
     try {
       await api(`/api/v1/admin/budgets/${tournamentId}`, {
@@ -579,6 +580,11 @@ export default function AdminPage() {
             <span>За месяц: <strong>{budgetSummary.monthly_profit ?? 0} ₽</strong></span>
             <span>За сезон: <strong>{budgetSummary.seasonal_profit ?? 0} ₽</strong></span>
             <span>Турниров с прибылью: <strong>{budgetSummary.tournaments_count ?? 0}</strong></span>
+            {budgets.filter((b) => !b.budget_set).length > 0 && (
+              <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">
+                Без бюджета: <strong>{budgets.filter((b) => !b.budget_set).length}</strong>
+              </span>
+            )}
           </div>
         )}
         {budgetsLoading ? (
@@ -598,14 +604,30 @@ export default function AdminPage() {
               </thead>
               <tbody>
                 {budgets.map((b) => (
-                  <tr key={b.tournament_id} className="border-b border-slate-100">
-                    <td className="px-2 py-2">{b.tournament_name}</td>
+                  <tr
+                    key={b.tournament_id}
+                    className={`border-b border-slate-100 ${!b.budget_set ? 'bg-amber-50' : ''}`}
+                  >
+                    <td className="px-2 py-2">
+                      <span className="font-medium">{b.tournament_name}</span>
+                      {!b.budget_set && (
+                        <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">
+                          Бюджет не задан
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-slate-600">
                       {typeof b.tournament_date === 'string' ? b.tournament_date : String(b.tournament_date).slice(0, 10)}
                     </td>
-                    <td className="px-2 py-2 text-right">{b.total_budget} ₽</td>
-                    <td className="px-2 py-2 text-right">{b.judges_payment} ₽</td>
-                    <td className="px-2 py-2 text-right">{b.admin_profit} ₽</td>
+                    <td className="px-2 py-2 text-right">
+                      {b.budget_set ? `${b.total_budget} ₽` : '—'}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {b.budget_set ? `${b.judges_payment} ₽` : '—'}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {b.budget_set ? `${b.admin_profit} ₽` : '—'}
+                    </td>
                     <td className="px-2 py-2">
                       {editingBudget?.id === b.tournament_id ? (
                         <div className="flex gap-1">
@@ -613,6 +635,8 @@ export default function AdminPage() {
                             type="number"
                             value={editingBudget.value}
                             onChange={(e) => setEditingBudget({ ...editingBudget, value: e.target.value })}
+                            placeholder="Сумма"
+                            min={1}
                             className="w-24 rounded border px-2 py-1"
                           />
                           <button
@@ -630,10 +654,10 @@ export default function AdminPage() {
                         </div>
                       ) : (
                         <button
-                          onClick={() => setEditingBudget({ id: b.tournament_id, value: String(b.total_budget) })}
-                          className="text-xs text-slate-500 hover:text-slate-700"
+                          onClick={() => setEditingBudget({ id: b.tournament_id, value: String(b.total_budget || '') })}
+                          className={`text-xs ${!b.budget_set ? 'font-medium text-amber-700 hover:text-amber-900' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                          Изменить
+                          {!b.budget_set ? 'Задать бюджет' : 'Изменить'}
                         </button>
                       )}
                     </td>

@@ -220,27 +220,47 @@ class BudgetService:
             return None
     
     async def get_all_budgets(self) -> List[Dict]:
-        """Получает информацию о всех бюджетах"""
+        """Получает информацию о всех турнирах: с бюджетом и без (для отображения админу)"""
         try:
-            budgets = self.session.query(TournamentBudget).join(Tournament).order_by(
+            # Все турниры, включая те, где бюджет не задан
+            tournaments = self.session.query(Tournament).order_by(
                 Tournament.date.desc()
             ).all()
-            
+
+            budget_by_tournament = {}
+            for b in self.session.query(TournamentBudget).all():
+                budget_by_tournament[b.tournament_id] = b
+
             result = []
-            for budget in budgets:
-                result.append({
-                    'tournament_id': budget.tournament_id,
-                    'tournament_name': budget.tournament.name,
-                    'tournament_date': budget.tournament.date,
-                    'tournament_month': budget.tournament.month,
-                    'total_budget': budget.total_budget,
-                    'judges_payment': budget.judges_payment or 0,
-                    'admin_profit': budget.admin_profit or 0,
-                    'budget_set_date': budget.budget_set_date
-                })
-            
+            for t in tournaments:
+                budget = budget_by_tournament.get(t.tournament_id)
+                if budget:
+                    result.append({
+                        'tournament_id': t.tournament_id,
+                        'tournament_name': t.name,
+                        'tournament_date': t.date,
+                        'tournament_month': t.month,
+                        'total_budget': budget.total_budget,
+                        'judges_payment': budget.judges_payment or 0,
+                        'admin_profit': budget.admin_profit or 0,
+                        'budget_set_date': budget.budget_set_date,
+                        'budget_set': True
+                    })
+                else:
+                    result.append({
+                        'tournament_id': t.tournament_id,
+                        'tournament_name': t.name,
+                        'tournament_date': t.date,
+                        'tournament_month': t.month,
+                        'total_budget': 0,
+                        'judges_payment': 0,
+                        'admin_profit': 0,
+                        'budget_set_date': None,
+                        'budget_set': False
+                    })
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Ошибка при получении всех бюджетов: {e}")
             return []
