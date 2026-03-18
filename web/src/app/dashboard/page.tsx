@@ -167,7 +167,7 @@ export default function DashboardPage() {
   const totalUnpaid = payments.filter((p) => !p.is_paid).reduce((s, p) => s + (p.amount ?? 0), 0)
   const monthly = detail?.monthly_earnings ?? []
   const maxMonthly = Math.max(...monthly.map((m) => m.total_amount), 1)
-  const nextTournament = regs.find((r) => r.status === 'approved') ?? regs[0]
+  const nextTournament = regs.find((r) => r.status === 'approved')
 
   if (loading) {
     return (
@@ -360,7 +360,7 @@ export default function DashboardPage() {
           ) : (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 py-8 text-slate-500">
               <Calendar className="mb-2 h-10 w-10 opacity-50" />
-              <p>Нет предстоящих заявок</p>
+              <p>{regs.length > 0 ? 'Нет одобренных заявок' : 'Нет предстоящих заявок'}</p>
               <Link
                 href="/dashboard/tournaments"
                 className="mt-2 text-sm text-cyan-600 hover:underline"
