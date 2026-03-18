@@ -78,16 +78,15 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
-        await bot.send_message(
-            CHANNEL_ID,
-            "🔔 <b>Новая заявка</b>\n"
-            f"👤 <b>{user_name}</b>\n"
-            f"Турнир: <b>{tournament_str}</b>\n"
-            "Статус: На рассмотрении",
-            parse_mode="HTML"
-        )
-        await bot.session.close()
+        async with Bot(token=BOT_TOKEN) as bot:
+            await bot.send_message(
+                CHANNEL_ID,
+                "🔔 <b>Новая заявка</b>\n"
+                f"👤 <b>{user_name}</b>\n"
+                f"Турнир: <b>{tournament_str}</b>\n"
+                "Статус: На рассмотрении",
+                parse_mode="HTML"
+            )
         logger.info("Уведомление в канал отправлено: %s, %s", user_name, tournament_str)
     except Exception as e:
         logger.exception("Ошибка отправки в Telegram-канал: %s", e)

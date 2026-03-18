@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI
 
@@ -25,11 +26,11 @@ def create_app() -> FastAPI:
     def on_startup():
         if not SMTP_HOST or not SMTP_FROM:
             logger.warning(
-                "Email не настроен: SMTP_HOST и SMTP_FROM должны быть в .env. "
+                "[SMTP] Email не настроен: SMTP_HOST и SMTP_FROM должны быть в .env. "
                 "Уведомления судьям на почту не будут отправляться."
             )
         else:
-            logger.info("Email (SMTP) настроен: %s", SMTP_HOST)
+            logger.info("[SMTP] Email настроен: host=%s port=%s from=%s", SMTP_HOST, os.getenv("SMTP_PORT", "587"), SMTP_FROM)
 
     return app
 

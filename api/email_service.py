@@ -62,10 +62,11 @@ def _base_html(title: str, content: str, accent_color: str = "#0f172a") -> str:
 def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> None:
     if not SMTP_HOST or not SMTP_FROM:
         logger.warning(
-            "Email не отправлен: SMTP не настроен. Добавьте в .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM"
+            "[SMTP] Email не отправлен: SMTP не настроен. Добавьте в .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM"
         )
         return
 
+    logger.info("[SMTP] Отправка письма: %s -> %s", subject[:50], to)
     msg = EmailMessage()
     msg["From"] = SMTP_FROM
     msg["To"] = to
@@ -87,9 +88,9 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
                 if SMTP_USER and SMTP_PASSWORD:
                     server.login(SMTP_USER, SMTP_PASSWORD)
                 server.send_message(msg)
-        logger.info("Email отправлен: %s -> %s", subject[:50], to)
+        logger.info("[SMTP] Email отправлен: %s -> %s", subject[:50], to)
     except Exception as e:
-        logger.exception("Ошибка отправки email на %s: %s", to, e)
+        logger.exception("[SMTP] Ошибка отправки email на %s: %s", to, e)
 
 
 def send_login_code_email(email: str, code: str) -> None:
