@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,10 +16,19 @@ router = APIRouter()
 
 @router.get("")
 async def list_budgets(
+    month: Optional[str] = Query(None),
+    future_only: bool = Query(True, description="Только будущие турниры"),
     admin: User = Depends(get_current_admin),
 ):
+    from datetime import date
+
     bs = BudgetService(bot=None)
     data = await bs.get_all_budgets()
+    if month:
+        data = [item for item in data if item.get("tournament_month") == month]
+    if future_only:
+        today = date.today()
+        data = [item for item in data if item.get("tournament_date") and item["tournament_date"] >= today]
     return [
         {
             **item,

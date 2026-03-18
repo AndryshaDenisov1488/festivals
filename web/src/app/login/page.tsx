@@ -89,7 +89,7 @@ export default function LoginPage() {
           Вход
         </h1>
         <p className="mb-6 text-center text-sm text-slate-500">
-          Войдите для доступа к турнирам и выплатам
+          Войдите для доступа к Фестивальчикам для судей
         </p>
 
         <div className="mb-4 flex rounded-lg bg-slate-100 p-1">

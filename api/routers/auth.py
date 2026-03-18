@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from models import User
-from api.schemas.auth import AuthRequestCodeIn, AuthVerifyCodeIn, AuthLoginIn, AuthSetPasswordIn, TokenOut
+from api.schemas.auth import AuthRequestCodeIn, AuthVerifyCodeIn, AuthLoginIn, AuthSetPasswordIn, AuthChangePasswordIn, TokenOut
 from api.dependencies import JWT_SECRET, JWT_ALGORITHM, get_current_user
 from api.email_service import send_login_code_email
 
@@ -108,6 +108,30 @@ def set_password(payload: AuthSetPasswordIn, user: User = Depends(get_current_us
         if not db_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         db_user.password_hash = pwd_context.hash(payload.password)
+        db.commit()
+        return
+    finally:
+        db.close()
+
+
+@router.post("/change-password", response_model=None, status_code=204)
+def change_password(payload: AuthChangePasswordIn, user: User = Depends(get_current_user)):
+    db: Session = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.user_id == user.user_id).first()
+        if not db_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if not db_user.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Пароль не задан. Задайте пароль в профиле.",
+            )
+        if not pwd_context.verify(payload.current_password, db_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Неверный текущий пароль",
+            )
+        db_user.password_hash = pwd_context.hash(payload.new_password)
         db.commit()
         return
     finally:

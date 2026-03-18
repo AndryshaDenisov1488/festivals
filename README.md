@@ -71,6 +71,9 @@ SMTP_USER=...
 SMTP_PASSWORD=...
 SMTP_FROM=noreply@example.com
 
+# Email админа для уведомлений о новых заявках (дублирует Telegram)
+ADMIN_EMAIL=admin@example.com
+
 # JWT для API (опционально, по умолчанию CHANGE_ME_SECRET)
 JWT_SECRET=your-random-secret
 ```

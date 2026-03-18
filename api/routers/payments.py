@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -22,20 +24,35 @@ def get_db():
 
 @router.get("/earnings/my/payments")
 def earnings_payments_list(
+    month: Optional[str] = None,
+    future_only: bool = False,
+    search: Optional[str] = None,
     user: User = Depends(get_current_user),
 ):
     """Список всех выплат (оплаченных и ожидающих) с payment_id для confirm/correct"""
+    from datetime import date
+
     db = SessionLocal()
     try:
-        payments = db.query(JudgePayment, Tournament).join(
+        q = db.query(JudgePayment, Tournament).join(
             Tournament, JudgePayment.tournament_id == Tournament.tournament_id
-        ).filter(JudgePayment.user_id == user.user_id).order_by(Tournament.date.desc()).all()
+        ).filter(JudgePayment.user_id == user.user_id)
+        if month:
+            q = q.filter(Tournament.month == month)
+        if future_only:
+            q = q.filter(Tournament.date >= date.today())
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            from sqlalchemy import or_
+            q = q.filter(or_(Tournament.name.ilike(term), Tournament.month.ilike(term)))
+        payments = q.order_by(Tournament.date.desc()).all()
         return [
             {
                 "payment_id": p.payment_id,
                 "tournament_id": p.tournament_id,
                 "tournament_name": t.name,
                 "tournament_date": format_date(t.date),
+                "tournament_month": t.month,
                 "amount": p.amount,
                 "is_paid": p.is_paid,
                 "payment_date": format_datetime(p.payment_date),

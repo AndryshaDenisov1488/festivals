@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X } from 'lucide-react'
+import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Budget = {
   tournament_id: number
@@ -41,19 +42,32 @@ export default function AdminPage() {
 
   const [registrations, setRegistrations] = useState<AdminRegistration[]>([])
   const [regsLoading, setRegsLoading] = useState(false)
-  const [regsFilter, setRegsFilter] = useState<'pending' | ''>('pending')
+  const [regsFilter, setRegsFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('pending')
+  const [regsMonthFilter, setRegsMonthFilter] = useState<MonthFilterValue>('future')
+  const [regsSearch, setRegsSearch] = useState('')
+  const [budgetsMonthFilter, setBudgetsMonthFilter] = useState<MonthFilterValue>('future')
 
   const [exportMonth, setExportMonth] = useState('')
   const [exportYear, setExportYear] = useState('')
   const [exportLoading, setExportLoading] = useState(false)
+
+  const [resultToast, setResultToast] = useState<{
+    type: 'approved' | 'rejected'
+    userName: string
+    tournamentName: string
+  } | null>(null)
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
   const loadBudgets = () => {
     if (!token) return
     setBudgetsLoading(true)
+    const params = new URLSearchParams()
+    if (budgetsMonthFilter === 'future') params.set('future_only', 'true')
+    else if (budgetsMonthFilter === 'all') params.set('future_only', 'false')
+    else params.set('month', budgetsMonthFilter)
     Promise.all([
-      api<Budget[]>('/api/v1/admin/budgets', { token }),
+      api<Budget[]>(`/api/v1/admin/budgets?${params}`, { token }),
       api<{ total_profit?: number; monthly_profit?: number; seasonal_profit?: number; tournaments_count?: number }>('/api/v1/admin/budgets/summary', { token })
     ])
       .then(([b, s]) => {
@@ -67,8 +81,13 @@ export default function AdminPage() {
   const loadRegistrations = () => {
     if (!token) return
     setRegsLoading(true)
-    const params = regsFilter ? `?status=${regsFilter}` : ''
-    api<AdminRegistration[]>(`/api/v1/admin/registrations${params}`, { token })
+    const params = new URLSearchParams()
+    if (regsFilter) params.set('status', regsFilter)
+    if (regsMonthFilter === 'future') params.set('future_only', 'true')
+    else if (regsMonthFilter === 'all') params.set('future_only', 'false')
+    else params.set('month', regsMonthFilter)
+    if (regsSearch.trim()) params.set('search', regsSearch.trim())
+    api<AdminRegistration[]>(`/api/v1/admin/registrations?${params}`, { token })
       .then(setRegistrations)
       .catch(() => setRegistrations([]))
       .finally(() => setRegsLoading(false))
@@ -76,11 +95,12 @@ export default function AdminPage() {
 
   useEffect(() => {
     loadBudgets()
-  }, [token])
+  }, [token, budgetsMonthFilter])
 
   useEffect(() => {
-    loadRegistrations()
-  }, [token, regsFilter])
+    const id = setTimeout(loadRegistrations, regsSearch ? 350 : 0)
+    return () => clearTimeout(id)
+  }, [token, regsFilter, regsMonthFilter, regsSearch])
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,21 +136,25 @@ export default function AdminPage() {
     }
   }
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (r: AdminRegistration) => {
     if (!token) return
     try {
-      await api(`/api/v1/admin/registrations/${id}/approve`, { method: 'POST', token })
+      await api(`/api/v1/admin/registrations/${r.registration_id}/approve`, { method: 'POST', token })
+      setResultToast({ type: 'approved', userName: r.user_name, tournamentName: r.tournament_name })
       loadRegistrations()
+      setTimeout(() => setResultToast(null), 2500)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
   }
 
-  const handleReject = async (id: number) => {
+  const handleReject = async (r: AdminRegistration) => {
     if (!token) return
     try {
-      await api(`/api/v1/admin/registrations/${id}/reject`, { method: 'POST', token })
+      await api(`/api/v1/admin/registrations/${r.registration_id}/reject`, { method: 'POST', token })
+      setResultToast({ type: 'rejected', userName: r.user_name, tournamentName: r.tournament_name })
       loadRegistrations()
+      setTimeout(() => setResultToast(null), 2500)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
@@ -182,6 +206,38 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8">
+      {resultToast && (
+        <div
+          className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 animate-toast-in rounded-xl px-6 py-4 shadow-lg ring-1 ring-black/5 ${
+            resultToast.type === 'approved'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-red-500 text-white'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3">
+            {resultToast.type === 'approved' ? (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+                <Check className="h-6 w-6" strokeWidth={2.5} />
+              </div>
+            ) : (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+                <X className="h-6 w-6" strokeWidth={2.5} />
+              </div>
+            )}
+            <div>
+              <p className="font-semibold">
+                {resultToast.type === 'approved' ? 'Заявка одобрена' : 'Заявка отклонена'}
+              </p>
+              <p className="text-sm opacity-90">
+                {resultToast.userName} · {resultToast.tournamentName}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">Админ-панель</h1>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -214,10 +270,13 @@ export default function AdminPage() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 font-medium text-slate-800">
-          <DollarSign className="h-5 w-5" />
-          Бюджеты турниров
-        </h2>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 font-medium text-slate-800">
+            <DollarSign className="h-5 w-5" />
+            Бюджеты турниров
+          </h2>
+          <MonthFilter value={budgetsMonthFilter} onChange={setBudgetsMonthFilter} />
+        </div>
         {budgetSummary && (
           <div className="mb-4 flex flex-wrap gap-4 rounded-lg bg-slate-50 p-3">
             <span>Общая прибыль: <strong>{budgetSummary.total_profit ?? 0} ₽</strong></span>
@@ -294,23 +353,48 @@ export default function AdminPage() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 font-medium text-slate-800">
-          <ClipboardList className="h-5 w-5" />
-          Заявки
-        </h2>
-        <div className="mb-3 flex gap-2">
-          <button
-            onClick={() => setRegsFilter('pending')}
-            className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${regsFilter === 'pending' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
-          >
-            На рассмотрении
-          </button>
-          <button
-            onClick={() => setRegsFilter('')}
-            className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${!regsFilter ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
-          >
-            Все
-          </button>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 font-medium text-slate-800">
+            <ClipboardList className="h-5 w-5" />
+            Заявки
+          </h2>
+          <MonthFilter value={regsMonthFilter} onChange={setRegsMonthFilter} />
+        </div>
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <input
+            type="search"
+            placeholder="Поиск по имени судьи или турниру..."
+            value={regsSearch}
+            onChange={(e) => setRegsSearch(e.target.value)}
+            aria-label="Поиск заявок"
+            className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:w-64"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setRegsFilter('pending')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${regsFilter === 'pending' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              На рассмотрении
+            </button>
+            <button
+              onClick={() => setRegsFilter('approved')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${regsFilter === 'approved' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Одобренные
+            </button>
+            <button
+              onClick={() => setRegsFilter('rejected')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${regsFilter === 'rejected' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Отклонённые
+            </button>
+            <button
+              onClick={() => setRegsFilter('')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${!regsFilter ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Все
+            </button>
+          </div>
         </div>
         {regsLoading ? (
           <div className="py-4 text-center text-slate-500">Загрузка...</div>
@@ -337,14 +421,14 @@ export default function AdminPage() {
                 {r.status === 'pending' && (
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <button
-                      onClick={() => handleApprove(r.registration_id)}
+                      onClick={() => handleApprove(r)}
                       className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white hover:bg-green-700"
                     >
                       <Check className="h-4 w-4" />
                       Одобрить
                     </button>
                     <button
-                      onClick={() => handleReject(r.registration_id)}
+                      onClick={() => handleReject(r)}
                       className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg border border-red-300 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                     >
                       <X className="h-4 w-4" />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { PlusCircle, Check } from 'lucide-react'
+import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Tournament = {
   tournament_id: number
@@ -21,13 +22,21 @@ export default function TournamentsPage() {
   const [myRegs, setMyRegs] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
   const [registering, setRegistering] = useState<number | null>(null)
+  const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('future')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
+    const params = new URLSearchParams()
+    if (monthFilter === 'future') params.set('future_only', 'true')
+    else if (monthFilter === 'all') params.set('future_only', 'false')
+    else params.set('month', monthFilter)
+    if (search.trim()) params.set('search', search.trim())
+    setLoading(true)
     Promise.all([
-      api<Tournament[]>('/api/v1/tournaments', { token }),
-      api<MyRegistration[]>('/api/v1/registrations/my', { token })
+      api<Tournament[]>(`/api/v1/tournaments?${params}`, { token }),
+      api<MyRegistration[]>(`/api/v1/registrations/my?${params}`, { token })
     ])
       .then(([tours, regs]) => {
         setItems(tours)
@@ -37,7 +46,7 @@ export default function TournamentsPage() {
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [monthFilter, search])
 
   const handleRegister = async (tournamentId: number) => {
     const token = localStorage.getItem('token')
@@ -67,7 +76,20 @@ export default function TournamentsPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Турниры</h1>
+      <div className="mb-4 flex flex-col gap-4 md:mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">Турниры</h1>
+          <MonthFilter value={monthFilter} onChange={setMonthFilter} />
+        </div>
+        <input
+          type="search"
+          placeholder="Поиск по названию турнира или месяцу..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Поиск турниров"
+          className="min-h-[44px] max-w-md rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        />
+      </div>
 
       {/* Mobile: cards */}
       <div className="space-y-3 md:hidden">

@@ -1,29 +1,40 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_validator
 
 
-class UserBase(BaseModel):
+_NAME_RE = __import__("re").compile(r"^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё\-]{1,29}$")
+
+
+class ProfileUpdateIn(BaseModel):
     first_name: str
     last_name: str
     function: str
     category: str
 
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = v.strip().replace("\t", " ").replace("\n", " ")
+        while "  " in v:
+            v = v.replace("  ", " ")
+        if not _NAME_RE.match(v):
+            raise ValueError(
+                "Только буквы (рус/англ) и дефис, длина от 2 до 30 символов. "
+                "Например: Андрей или Анна-Мария"
+            )
+        return v
 
-class UserOut(UserBase):
-    user_id: int
-    email: EmailStr | None = None
-    is_admin: bool = False
+    @field_validator("function")
+    @classmethod
+    def validate_function(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Функция должна быть не менее 2 символов")
+        return v
 
-    class Config:
-        from_attributes = True
-
-
-class UserUpdateIn(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
-    function: str | None = None
-    category: str | None = None
-
-
-class UserEmailUpdateIn(BaseModel):
-    email: EmailStr
-
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Категория не может быть пустой")
+        return v

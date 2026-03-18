@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,6 +12,7 @@ from api.utils import format_date
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class BroadcastIn(BaseModel):
@@ -47,15 +49,31 @@ async def broadcast(
 def admin_list_registrations(
     month: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    future_only: bool = Query(True, description="Только будущие турниры"),
+    search: Optional[str] = Query(None, description="Поиск по имени судьи или турниру"),
     admin: User = Depends(get_current_admin),
 ):
+    from datetime import date
+
     db = SessionLocal()
     try:
-        q = db.query(Registration).join(Tournament)
+        q = db.query(Registration).join(Tournament).join(User, Registration.user_id == User.user_id)
         if month:
             q = q.filter(Tournament.month == month)
+        if future_only:
+            q = q.filter(Tournament.date >= date.today())
         if status:
             q = q.filter(Registration.status == status)
+        if search and search.strip():
+            from sqlalchemy import or_
+            term = f"%{search.strip()}%"
+            q = q.filter(
+                or_(
+                    User.first_name.ilike(term),
+                    User.last_name.ilike(term),
+                    Tournament.name.ilike(term),
+                )
+            )
         q = q.order_by(Tournament.date.desc(), Registration.registration_id)
         regs = q.all()
         return [
@@ -76,35 +94,41 @@ def admin_list_registrations(
 
 
 async def _notify_judge_approve(user_id: int, tournament_name: str, tournament_date: str) -> None:
-    """Telegram + email при одобрении заявки."""
-    if BOT_TOKEN:
-        try:
-            from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
-            await bot.send_message(
-                user_id,
-                f"✅ Вы утверждены для судейства турнира <b>{tournament_date} {tournament_name}</b>!",
-                parse_mode="HTML"
-            )
-            await bot.session.close()
-        except Exception:
-            pass
+    """Telegram при одобрении заявки."""
+    if not BOT_TOKEN:
+        logger.warning("BOT_TOKEN не задан, Telegram-уведомление судье пропущено")
+        return
+    try:
+        from aiogram import Bot
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            user_id,
+            f"✅ Вы утверждены для судейства турнира <b>{tournament_date} {tournament_name}</b>!",
+            parse_mode="HTML"
+        )
+        await bot.session.close()
+        logger.info("Telegram approve отправлен user_id=%s", user_id)
+    except Exception as e:
+        logger.exception("Ошибка Telegram approve user_id=%s: %s", user_id, e)
 
 
 async def _notify_judge_reject(user_id: int, tournament_name: str, tournament_date: str) -> None:
-    """Telegram + email при отклонении заявки."""
-    if BOT_TOKEN:
-        try:
-            from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
-            await bot.send_message(
-                user_id,
-                f"❌ Ваша заявка на судейство турнира <b>{tournament_date} {tournament_name}</b> отклонена.",
-                parse_mode="HTML"
-            )
-            await bot.session.close()
-        except Exception:
-            pass
+    """Telegram при отклонении заявки."""
+    if not BOT_TOKEN:
+        logger.warning("BOT_TOKEN не задан, Telegram-уведомление судье пропущено")
+        return
+    try:
+        from aiogram import Bot
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            user_id,
+            f"❌ Ваша заявка на судейство турнира <b>{tournament_date} {tournament_name}</b> отклонена.",
+            parse_mode="HTML"
+        )
+        await bot.session.close()
+        logger.info("Telegram reject отправлен user_id=%s", user_id)
+    except Exception as e:
+        logger.exception("Ошибка Telegram reject user_id=%s: %s", user_id, e)
 
 
 @router.post("/registrations/{registration_id}/approve")
@@ -150,9 +174,15 @@ async def admin_approve_registration(
             db.commit()
 
         await _notify_judge_approve(u.user_id, tournament_name, tournament_date)
-        if u.email and getattr(u, "email_verified", False):
+        if u.email:
             from api.email_service import send_registration_approved_email
-            send_registration_approved_email(u.email, tournament_name, tournament_date)
+            try:
+                send_registration_approved_email(u.email, tournament_name, tournament_date)
+                logger.info("Email approve отправлен на %s", u.email)
+            except Exception as e:
+                logger.exception("Ошибка email approve: %s", e)
+        else:
+            logger.info("Email approve пропущен: у судьи user_id=%s нет email", u.user_id)
 
         return {"ok": True, "status": "approved"}
     finally:
@@ -183,9 +213,15 @@ async def admin_reject_registration(
         tournament_name = t.name
 
         await _notify_judge_reject(u.user_id, tournament_name, tournament_date)
-        if u.email and getattr(u, "email_verified", False):
+        if u.email:
             from api.email_service import send_registration_rejected_email
-            send_registration_rejected_email(u.email, tournament_name, tournament_date)
+            try:
+                send_registration_rejected_email(u.email, tournament_name, tournament_date)
+                logger.info("Email reject отправлен на %s", u.email)
+            except Exception as e:
+                logger.exception("Ошибка email reject: %s", e)
+        else:
+            logger.info("Email reject пропущен: у судьи user_id=%s нет email", u.user_id)
 
         return {"ok": True, "status": "rejected"}
     finally:

@@ -1,7 +1,10 @@
+import logging
 import os
 import smtplib
 from email.message import EmailMessage
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 SMTP_HOST = os.getenv("SMTP_HOST", "")
@@ -58,6 +61,7 @@ def _base_html(title: str, content: str, accent_color: str = "#0f172a") -> str:
 
 def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> None:
     if not SMTP_HOST or not SMTP_FROM:
+        logger.warning("Email не отправлен: SMTP не настроен (SMTP_HOST=%s, SMTP_FROM=%s)", bool(SMTP_HOST), bool(SMTP_FROM))
         return
 
     msg = EmailMessage()
@@ -69,17 +73,21 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
     if html:
         msg.add_alternative(html, subtype="html")
 
-    if SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-            if SMTP_USER and SMTP_PASSWORD:
-                server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
-    else:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            if SMTP_USER and SMTP_PASSWORD:
-                server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
+    try:
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+                if SMTP_USER and SMTP_PASSWORD:
+                    server.login(SMTP_USER, SMTP_PASSWORD)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                if SMTP_USER and SMTP_PASSWORD:
+                    server.login(SMTP_USER, SMTP_PASSWORD)
+                server.send_message(msg)
+        logger.info("Email отправлен: %s -> %s", subject[:50], to)
+    except Exception as e:
+        logger.exception("Ошибка отправки email на %s: %s", to, e)
 
 
 def send_login_code_email(email: str, code: str) -> None:
@@ -157,6 +165,91 @@ def send_registration_rejected_email(email: str, tournament_name: str, tournamen
       </p>
     """
     html = _base_html("Заявка отклонена", content, accent_color="#b91c1c")
+    send_email(email, subject, text, html)
+
+
+def send_new_registration_to_admin_email(admin_email: str, user_name: str, tournament_str: str) -> None:
+    """Уведомление админу о новой заявке (дублирует Telegram)."""
+    subject = f"Новая заявка: {user_name} — {tournament_str}"
+    text = (
+        f"Новая заявка на судейство.\n\n"
+        f"Судья: {user_name}\n"
+        f"Турнир: {tournament_str}\n"
+        "Статус: На рассмотрении"
+    )
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#dbeafe;border-radius:50%;line-height:56px;font-size:28px;">🔔</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Новая заявка
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
+        <strong>Судья:</strong> {user_name}
+      </p>
+      <div style="background:#eff6ff;border-radius:12px;padding:20px;margin:24px 0;border-left:4px solid #3b82f6;">
+        <p style="margin:0;font-size:16px;font-weight:600;color:#1e40af;">{tournament_str}</p>
+        <p style="margin:8px 0 0;font-size:14px;color:#64748b;">Статус: На рассмотрении</p>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;text-align:center;">
+        <a href="{WEB_PORTAL_URL}" style="color:#0f172a;font-weight:600;text-decoration:none;">Открыть кабинет →</a>
+      </p>
+    """
+    html = _base_html("Новая заявка", content, accent_color="#2563eb")
+    send_email(admin_email, subject, text, html)
+
+
+def send_payment_reminder_email(email: str, user_name: str, tournament_name: str, tournament_date: str, is_repeat: bool = False) -> None:
+    """Напоминание судье об оплате (дублирует Telegram)."""
+    if is_repeat:
+        subject = f"Повторное напоминание: оплата за турнир {tournament_name}"
+    else:
+        subject = f"Напоминание об оплате: {tournament_name}"
+    text = (
+        f"Привет, {user_name}!\n\n"
+        f"Прошёл день с турнира «{tournament_name}» ({tournament_date}).\n\n"
+        "Андрюша заплатил вам за этот турнир?"
+    )
+    if is_repeat:
+        text += "\n\nПожалуйста, ответьте в боте, чтобы мы могли отследить оплату!"
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#fef3c7;border-radius:50%;line-height:56px;font-size:28px;">💰</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Напоминание об оплате
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
+        Привет, {user_name}!
+      </p>
+      <div style="background:#fffbeb;border-radius:12px;padding:20px;margin:24px 0;border-left:4px solid #f59e0b;">
+        <p style="margin:0;font-size:16px;font-weight:600;color:#92400e;">{tournament_name}</p>
+        <p style="margin:8px 0 0;font-size:14px;color:#b45309;">{tournament_date}</p>
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;text-align:center;">
+        Андрюша заплатил вам за этот турнир? Ответьте в Telegram-боте.
+      </p>
+    """
+    html = _base_html("Напоминание об оплате", content, accent_color="#d97706")
+    send_email(email, subject, text, html)
+
+
+def send_tournament_deleted_email(email: str, tournament_name: str, tournament_month: str) -> None:
+    """Уведомление об удалении турнира (дублирует Telegram)."""
+    subject = f"Турнир удалён: {tournament_name} ({tournament_month})"
+    text = f"Турнир «{tournament_name}» ({tournament_month}) удалён админом."
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#fee2e2;border-radius:50%;line-height:56px;font-size:28px;">❗</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Турнир удалён
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;text-align:center;">
+        Турнир «{tournament_name}» ({tournament_month}) удалён админом.
+      </p>
+    """
+    html = _base_html("Турнир удалён", content, accent_color="#b91c1c")
     send_email(email, subject, text, html)
 
 

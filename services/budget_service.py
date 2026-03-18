@@ -232,6 +232,7 @@ class BudgetService:
                     'tournament_id': budget.tournament_id,
                     'tournament_name': budget.tournament.name,
                     'tournament_date': budget.tournament.date,
+                    'tournament_month': budget.tournament.month,
                     'total_budget': budget.total_budget,
                     'judges_payment': budget.judges_payment or 0,
                     'admin_profit': budget.admin_profit or 0,

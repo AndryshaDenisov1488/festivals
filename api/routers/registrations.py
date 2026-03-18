@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Registration, Tournament, User
 from models import RegistrationStatus
-from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID
+from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
 from api.dependencies import get_current_user, get_db
 from api.utils import format_date
 
@@ -23,14 +24,32 @@ class RegistrationCreateIn(BaseModel):
 def my_registrations(
     month: Optional[str] = None,
     status: Optional[str] = None,
+    future_only: bool = True,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    q = db.query(Registration).filter(Registration.user_id == user.user_id)
+    from datetime import date
+
+    q = db.query(Registration).join(Tournament, Registration.tournament_id == Tournament.tournament_id).filter(
+        Registration.user_id == user.user_id
+    )
     if month:
-        q = q.join(Tournament, Registration.tournament_id == Tournament.tournament_id).filter(Tournament.month == month)
+        q = q.filter(Tournament.month == month)
+    if future_only:
+        q = q.filter(Tournament.date >= date.today())
     if status:
         q = q.filter(Registration.status == status)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        from sqlalchemy import or_
+        q = q.filter(
+            or_(
+                Tournament.name.ilike(term),
+                Tournament.month.ilike(term),
+            )
+        )
+    q = q.order_by(Tournament.date)
     regs = q.all()
     return [
         {
@@ -47,10 +66,14 @@ def my_registrations(
     ]
 
 
+logger = logging.getLogger(__name__)
+
+
 async def _notify_channel_new_registration(user_name: str, tournament_str: str) -> None:
     """Отправляет уведомление о новой заявке в Telegram-канал."""
     from config import BOT_TOKEN
     if not BOT_TOKEN or not CHANNEL_ID:
+        logger.warning("Telegram-канал: BOT_TOKEN или CHANNEL_ID не заданы, уведомление пропущено")
         return
     try:
         from aiogram import Bot
@@ -64,8 +87,20 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
             parse_mode="HTML"
         )
         await bot.session.close()
-    except Exception:
-        pass
+        logger.info("Уведомление в канал отправлено: %s, %s", user_name, tournament_str)
+    except Exception as e:
+        logger.exception("Ошибка отправки в Telegram-канал: %s", e)
+
+
+def _notify_admin_email_new_registration(user_name: str, tournament_str: str) -> None:
+    """Дублирует уведомление о новой заявке на email админа."""
+    if not ADMIN_EMAIL:
+        return
+    try:
+        from api.email_service import send_new_registration_to_admin_email
+        send_new_registration_to_admin_email(ADMIN_EMAIL, user_name, tournament_str)
+    except Exception as e:
+        logger.exception("Ошибка отправки email админу: %s", e)
 
 
 @router.post("", status_code=201)
@@ -104,6 +139,7 @@ async def create_registration(
     user_name = f"{user.first_name} {user.last_name}"
     tournament_str = f"{format_date(tournament.date)} {tournament.name}"
     await _notify_channel_new_registration(user_name, tournament_str)
+    _notify_admin_email_new_registration(user_name, tournament_str)
 
     return {
         "registration_id": reg.registration_id,

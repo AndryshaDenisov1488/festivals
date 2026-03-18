@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { Check, Edit2 } from 'lucide-react'
+import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Payment = {
   payment_id: number
   tournament_id: number
   tournament_name: string
   tournament_date: string
+  tournament_month?: string
   amount: number | null
   is_paid: boolean
   payment_date: string | null
@@ -25,12 +27,20 @@ export default function EarningsPage() {
   const [confirmAmount, setConfirmAmount] = useState('')
   const [correctAmount, setCorrectAmount] = useState('')
   const [modalPayment, setModalPayment] = useState<Payment | null>(null)
+  const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('all')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
+    const params = new URLSearchParams()
+    if (monthFilter === 'future') params.set('future_only', 'true')
+    else if (monthFilter === 'all') params.set('future_only', 'false')
+    else params.set('month', monthFilter)
+    if (search.trim()) params.set('search', search.trim())
+    setLoading(true)
     Promise.all([
-      api<Payment[]>('/api/v1/earnings/my/payments', { token }),
+      api<Payment[]>(`/api/v1/earnings/my/payments?${params}`, { token }),
       api<SummaryResponse>('/api/v1/earnings/my/summary', { token })
     ])
       .then(([p, s]) => {
@@ -39,7 +49,7 @@ export default function EarningsPage() {
       })
       .catch(() => setPayments([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [monthFilter])
 
   const handleConfirm = async (payment: Payment) => {
     const amount = parseFloat(confirmAmount)
@@ -122,7 +132,20 @@ export default function EarningsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">Выплаты</h1>
+      <div className="mb-4 flex flex-col gap-4 md:mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">Выплаты</h1>
+          <MonthFilter value={monthFilter} onChange={setMonthFilter} />
+        </div>
+        <input
+          type="search"
+          placeholder="Поиск по названию турнира или месяцу..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Поиск выплат"
+          className="min-h-[44px] max-w-md rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        />
+      </div>
       {summary?.total_amount != null && (
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-slate-500">Итого</p>

@@ -14,7 +14,9 @@ export async function api<T>(
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || String(res.status))
+    const d = err.detail
+    const msg = Array.isArray(d) && d.length > 0 ? d[0].msg : (typeof d === 'string' ? d : String(d ?? res.statusText))
+    throw new Error(msg)
   }
   if (res.status === 204) return undefined as T
   return res.json()

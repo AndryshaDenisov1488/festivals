@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Registration = {
   registration_id: number
@@ -19,15 +20,25 @@ const statusLabels: Record<string, string> = {
 export default function RegistrationsPage() {
   const [items, setItems] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
+  const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('future')
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('')
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    api<Registration[]>('/api/v1/registrations/my', { token })
+    const params = new URLSearchParams()
+    if (monthFilter === 'future') params.set('future_only', 'true')
+    else if (monthFilter === 'all') params.set('future_only', 'false')
+    else params.set('month', monthFilter)
+    if (statusFilter) params.set('status', statusFilter)
+    if (search.trim()) params.set('search', search.trim())
+    setLoading(true)
+    api<Registration[]>(`/api/v1/registrations/my?${params}`, { token })
       .then(setItems)
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [monthFilter, statusFilter, search])
 
   const handleCancel = async (id: number) => {
     if (!confirm('Отменить заявку?')) return
@@ -51,7 +62,48 @@ export default function RegistrationsPage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Мои заявки</h1>
+      <div className="mb-4 flex flex-col gap-4 md:mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-semibold text-slate-800 md:text-2xl">Мои заявки</h1>
+          <MonthFilter value={monthFilter} onChange={setMonthFilter} />
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            type="search"
+            placeholder="Поиск по названию турнира или месяцу..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Поиск заявок"
+            className="min-h-[44px] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:max-w-xs"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setStatusFilter('')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${!statusFilter ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Все
+            </button>
+            <button
+              onClick={() => setStatusFilter('pending')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${statusFilter === 'pending' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              На рассмотрении
+            </button>
+            <button
+              onClick={() => setStatusFilter('approved')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${statusFilter === 'approved' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Одобренные
+            </button>
+            <button
+              onClick={() => setStatusFilter('rejected')}
+              className={`min-h-[44px] rounded-lg px-4 py-2.5 text-sm ${statusFilter === 'rejected' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+            >
+              Отклонённые
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="space-y-3">
         {items.map((r) => (
           <div

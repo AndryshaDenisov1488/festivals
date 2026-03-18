@@ -126,7 +126,7 @@ async def reminder_job():
                     logger.info("[reminder_job] Sent reminder to user_id=%s", user.user_id)
                 except Exception as e:
                     logger.error("[reminder_job] Could not send to user_id=%s: %s", user.user_id, e)
-                if user.email and getattr(user, "email_verified", False):
+                if user.email:
                     try:
                         from api.email_service import send_tournament_reminder_email
                         send_tournament_reminder_email(
@@ -136,7 +136,7 @@ async def reminder_job():
                         )
                         logger.info("[reminder_job] Sent reminder email to %s", user.email)
                     except Exception as e:
-                        logger.warning("[reminder_job] Email reminder failed for %s: %s", user.email, e)
+                        logger.exception("[reminder_job] Email reminder failed for %s: %s", user.email, e)
     except Exception as e:
         logger.exception("[reminder_job] Unexpected error")
         # Отправляем критическую ошибку в канал мониторинга

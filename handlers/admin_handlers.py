@@ -777,12 +777,18 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                 
                 logger.info(f"Удален турнир {tournament_id}: платежей={payments_deleted}, регистраций={registrations_deleted}, бюджетов={budgets_deleted}")
 
-                # Уведомим всех
+                # Уведомим всех (Telegram + email)
                 for u in session.query(User).all():
                     try:
                         await cb.message.bot.send_message(u.user_id, f"❗️ Турнир «{title}» ({month}) удалён админом.")
                     except Exception as e:
                         logger.error("Failed to notify user %s about tournament deletion: %s", u.user_id, e)
+                    if u.email:
+                        try:
+                            from api.email_service import send_tournament_deleted_email
+                            send_tournament_deleted_email(u.email, title, month)
+                        except Exception as e:
+                            logger.exception("Ошибка email об удалении турнира для %s: %s", u.email, e)
 
                 # Логируем действие
                 action_logger = get_action_logger()
@@ -993,12 +999,15 @@ async def process_approve_registration(callback_query: types.CallbackQuery):
                 f"✅ Вы утверждены для судейства турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b>!",
                 parse_mode=ParseMode.HTML
             )
-            if u.email and getattr(u, "email_verified", False):
+            if u.email:
                 try:
                     from api.email_service import send_registration_approved_email
                     send_registration_approved_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                    logger.info("Email approve отправлен на %s", u.email)
                 except Exception as e:
-                    logger.warning("Failed to send approval email: %s", e)
+                    logger.exception("Ошибка email approve: %s", e)
+            else:
+                logger.info("Email approve пропущен: у судьи user_id=%s нет email", u.user_id)
         else:
             await callback_query.answer("Заявка уже обработана.", show_alert=True)
     except SQLAlchemyError:
@@ -1032,12 +1041,15 @@ async def process_reject_registration(callback_query: types.CallbackQuery):
                 f"❌ Ваша заявка на судейство турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> отклонена.",
                 parse_mode=ParseMode.HTML
             )
-            if u.email and getattr(u, "email_verified", False):
+            if u.email:
                 try:
                     from api.email_service import send_registration_rejected_email
                     send_registration_rejected_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                    logger.info("Email reject отправлен на %s", u.email)
                 except Exception as e:
-                    logger.warning("Failed to send rejection email: %s", e)
+                    logger.exception("Ошибка email reject: %s", e)
+            else:
+                logger.info("Email reject пропущен: у судьи user_id=%s нет email", u.user_id)
         else:
             await callback_query.answer("Заявка уже обработана.", show_alert=True)
     except SQLAlchemyError:

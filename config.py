@@ -10,6 +10,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
 # Канал или чат для уведомлений (например, "-1001234567890" или "@your_channel")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")
+# Email админа для уведомлений о новых заявках (опционально)
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 
 def validate_config():
     """Валидация конфигурации при запуске"""

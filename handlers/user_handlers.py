@@ -10,7 +10,7 @@ import sqlite3
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus
 from states import EditProfile, MyRegistrations, CorrectEarnings, LinkEmail
-from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT, WEB_PORTAL_URL
+from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT, WEB_PORTAL_URL, ADMIN_EMAIL
 from keyboards import main_menu
 from services.excel_export import split_text
 from utils.error_monitor import get_error_monitor
@@ -455,6 +455,14 @@ async def process_tournament(callback_query: types.CallbackQuery):
                 f"Статус: {status_text}",
                 parse_mode=ParseMode.HTML
             )
+
+        if ADMIN_EMAIL:
+            try:
+                from api.email_service import send_new_registration_to_admin_email
+                user_name = f"{user.first_name} {user.last_name}"
+                send_new_registration_to_admin_email(ADMIN_EMAIL, user_name, tournament_str)
+            except Exception as e:
+                logger.exception("Ошибка отправки email админу о новой заявке: %s", e)
 
     except SQLAlchemyError as e:
         logger.error(f"Ошибка при записи на турнир: {e}")

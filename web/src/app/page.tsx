@@ -51,7 +51,7 @@ export default function HomePage() {
             Платформа для судей
           </h1>
           <p className="mb-10 text-lg text-slate-600 sm:text-xl">
-            Управляйте заявками на турниры, отслеживайте выплаты и оставайтесь на связи с командой.
+            Управляйте заявками на турниры, судите фестивали, радуйтесь жизни.
           </p>
           <Link
             href="/login"
@@ -64,7 +64,7 @@ export default function HomePage() {
 
       <footer className="border-t border-slate-200/60 py-6">
         <p className="text-center text-sm text-slate-500">
-          Веб-портал судей · Турниры и выплаты
+          Веб-портал судей · Фестивальчики для судей
         </p>
       </footer>
     </div>

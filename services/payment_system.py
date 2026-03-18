@@ -371,6 +371,18 @@ class PaymentSystem:
             reply_markup=payment_reminder_keyboard(payment.payment_id),
             parse_mode='HTML'
         )
+        if payment.user.email:
+            try:
+                from api.email_service import send_payment_reminder_email
+                send_payment_reminder_email(
+                    payment.user.email,
+                    payment.user.first_name,
+                    payment.tournament.name,
+                    payment.tournament.date.strftime('%d.%m.%Y'),
+                    is_repeat=payment.reminder_sent
+                )
+            except Exception as e:
+                logger.exception("Ошибка отправки email напоминания об оплате: %s", e)
     
     async def handle_payment_confirmation(self, payment_id: int, is_paid: bool, amount: Optional[float] = None):
         """Обрабатывает подтверждение оплаты от судьи"""
