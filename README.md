@@ -5,7 +5,7 @@ Telegram-бот для судей и веб-интерфейс для работ
 ## Структура
 
 - **Бот** — Telegram-бот (aiogram)
-- **API** — FastAPI (порт 8100)
+- **API** — FastAPI (порт 8101)
 - **Web** — Next.js (порт 3000)
 
 ## Локальная разработка
@@ -80,13 +80,13 @@ JWT_SECRET=your-random-secret
 Перед `npm run build` задай `NEXT_PUBLIC_API_URL`:
 
 - **С nginx** (веб и API на одном домене, напр. festsfs.ru): `NEXT_PUBLIC_API_URL=""` — запросы идут на `/api/...`
-- **Без nginx** (прямой доступ): `NEXT_PUBLIC_API_URL=http://IP_СЕРВЕРА:8100`
+- **Без nginx** (прямой доступ): `NEXT_PUBLIC_API_URL=http://IP_СЕРВЕРА:8101`
 
 ```bash
 cd web
 NEXT_PUBLIC_API_URL="" npm run build   # для nginx
 # или
-NEXT_PUBLIC_API_URL=http://192.168.1.10:8100 npm run build   # без nginx
+NEXT_PUBLIC_API_URL=http://192.168.1.10:8101 npm run build   # без nginx
 ```
 
 ### 5. Systemd
@@ -156,4 +156,4 @@ sudo nginx -t && sudo systemctl reload nginx
 - `GET /api/v1/admin/exports/month?month=...` — экспорт Excel по месяцу
 - `GET /api/v1/admin/exports/year?year=...` — экспорт Excel по году
 
-Документация: `http://IP:8100/docs`
+Документация: `http://IP:8101/docs` (или https://festsfs.ru/docs через nginx)
