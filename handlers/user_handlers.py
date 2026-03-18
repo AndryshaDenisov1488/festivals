@@ -10,7 +10,7 @@ import sqlite3
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus
 from states import EditProfile, MyRegistrations, CorrectEarnings, LinkEmail
-from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT
+from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT, WEB_PORTAL_URL
 from keyboards import main_menu
 from services.excel_export import split_text
 from utils.error_monitor import get_error_monitor
@@ -183,7 +183,7 @@ async def cmd_link_email(message: types.Message, state: FSMContext):
         if user.email and getattr(user, "email_verified", False):
             await message.answer(
                 f"✅ Email уже привязан: <code>{user.email}</code>\n\n"
-                "Вы можете входить на веб-портал по этому адресу.",
+                f"Вы можете входить на <a href=\"{WEB_PORTAL_URL}\">веб-портал</a> для судей.",
                 parse_mode=ParseMode.HTML
             )
             return
@@ -208,7 +208,7 @@ async def link_email_step(callback_query: types.CallbackQuery, state: FSMContext
         if user.email and getattr(user, "email_verified", False):
             await callback_query.message.answer(
                 f"✅ Email уже привязан: <code>{user.email}</code>\n\n"
-                "Вы можете входить на веб-портал по этому адресу.",
+                f"Вы можете входить на <a href=\"{WEB_PORTAL_URL}\">веб-портал</a> для судей.",
                 parse_mode=ParseMode.HTML
             )
             await callback_query.answer()
@@ -316,7 +316,7 @@ async def process_link_email_code(message: types.Message, state: FSMContext):
         menu_manager = get_menu_manager()
         await menu_manager.return_to_menu(
             message, state,
-            f"✅ Email <b>{email}</b> успешно привязан!\n\nТеперь вы можете входить на веб-портал судей.",
+            f"✅ Email <b>{email}</b> успешно привязан!\n\nТеперь вы можете входить на <a href=\"{WEB_PORTAL_URL}\">веб-портал</a> для судей.",
             None
         )
     finally:

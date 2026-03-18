@@ -16,4 +16,5 @@
 body {
   color: hsl(var(--foreground));
   background: hsl(var(--background));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

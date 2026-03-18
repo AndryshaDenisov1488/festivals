@@ -993,6 +993,12 @@ async def process_approve_registration(callback_query: types.CallbackQuery):
                 f"✅ Вы утверждены для судейства турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b>!",
                 parse_mode=ParseMode.HTML
             )
+            if u.email and getattr(u, "email_verified", False):
+                try:
+                    from api.email_service import send_registration_approved_email
+                    send_registration_approved_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                except Exception as e:
+                    logger.warning("Failed to send approval email: %s", e)
         else:
             await callback_query.answer("Заявка уже обработана.", show_alert=True)
     except SQLAlchemyError:
@@ -1026,6 +1032,12 @@ async def process_reject_registration(callback_query: types.CallbackQuery):
                 f"❌ Ваша заявка на судейство турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> отклонена.",
                 parse_mode=ParseMode.HTML
             )
+            if u.email and getattr(u, "email_verified", False):
+                try:
+                    from api.email_service import send_registration_rejected_email
+                    send_registration_rejected_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                except Exception as e:
+                    logger.warning("Failed to send rejection email: %s", e)
         else:
             await callback_query.answer("Заявка уже обработана.", show_alert=True)
     except SQLAlchemyError:

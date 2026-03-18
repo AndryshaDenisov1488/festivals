@@ -67,8 +67,62 @@ export default function TournamentsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">Турниры</h1>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Турниры</h1>
+
+      {/* Mobile: cards */}
+      <div className="space-y-3 md:hidden">
+        {items.map((t) => {
+          const status = myRegs[t.tournament_id]
+          const canRegister = !status
+          const isPending = status === 'pending'
+          const isApproved = status === 'approved'
+          return (
+            <div
+              key={t.tournament_id}
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <p className="font-medium text-slate-800">{t.name}</p>
+              <p className="text-sm text-slate-500">
+                {t.date} · {t.month}
+              </p>
+              <div className="mt-3">
+                {canRegister && (
+                  <button
+                    onClick={() => handleRegister(t.tournament_id)}
+                    disabled={registering !== null}
+                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    {registering === t.tournament_id ? 'Отправка...' : 'Подать заявку'}
+                  </button>
+                )}
+                {isPending && (
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+                    На рассмотрении
+                  </span>
+                )}
+                {isApproved && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">
+                    <Check className="h-3 w-3" />
+                    Одобрена
+                  </span>
+                )}
+                {status === 'rejected' && (
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800">
+                    Отклонена
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+        {items.length === 0 && (
+          <p className="py-8 text-center text-slate-500">Нет турниров</p>
+        )}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">

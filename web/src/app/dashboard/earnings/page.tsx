@@ -198,7 +198,7 @@ export default function EarningsPage() {
           onClick={() => setModalPayment(null)}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl mx-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-4 font-semibold text-slate-800">
@@ -221,13 +221,13 @@ export default function EarningsPage() {
                   <button
                     onClick={() => handleConfirm(modalPayment)}
                     disabled={confirming !== null}
-                    className="flex-1 rounded-lg bg-emerald-600 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
+                    className="min-h-[44px] flex-1 rounded-lg bg-emerald-600 py-2.5 text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {confirming ? 'Сохранение...' : 'Подтвердить'}
                   </button>
                   <button
                     onClick={() => setModalPayment(null)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50"
+                    className="min-h-[44px] rounded-lg border border-slate-300 px-4 py-2.5 hover:bg-slate-50"
                   >
                     Отмена
                   </button>
@@ -249,13 +249,13 @@ export default function EarningsPage() {
                   <button
                     onClick={() => handleCorrect(modalPayment)}
                     disabled={correcting !== null}
-                    className="flex-1 rounded-lg bg-slate-800 py-2 text-white hover:bg-slate-700 disabled:opacity-50"
+                    className="min-h-[44px] flex-1 rounded-lg bg-slate-800 py-2.5 text-white hover:bg-slate-700 disabled:opacity-50"
                   >
                     {correcting ? 'Сохранение...' : 'Сохранить'}
                   </button>
                   <button
                     onClick={() => setModalPayment(null)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-50"
+                    className="min-h-[44px] rounded-lg border border-slate-300 px-4 py-2.5 hover:bg-slate-50"
                   >
                     Отмена
                   </button>

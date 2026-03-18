@@ -47,8 +47,29 @@ def my_registrations(
     ]
 
 
+async def _notify_channel_new_registration(user_name: str, tournament_str: str) -> None:
+    """Отправляет уведомление о новой заявке в Telegram-канал."""
+    from config import BOT_TOKEN
+    if not BOT_TOKEN or not CHANNEL_ID:
+        return
+    try:
+        from aiogram import Bot
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            CHANNEL_ID,
+            "🔔 <b>Новая заявка</b>\n"
+            f"👤 <b>{user_name}</b>\n"
+            f"Турнир: <b>{tournament_str}</b>\n"
+            "Статус: На рассмотрении",
+            parse_mode="HTML"
+        )
+        await bot.session.close()
+    except Exception:
+        pass
+
+
 @router.post("", status_code=201)
-def create_registration(
+async def create_registration(
     payload: RegistrationCreateIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -79,6 +100,11 @@ def create_registration(
     db.add(reg)
     db.commit()
     db.refresh(reg)
+
+    user_name = f"{user.first_name} {user.last_name}"
+    tournament_str = f"{format_date(tournament.date)} {tournament.name}"
+    await _notify_channel_new_registration(user_name, tournament_str)
+
     return {
         "registration_id": reg.registration_id,
         "tournament_id": reg.tournament_id,

@@ -51,12 +51,12 @@ export default function RegistrationsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">Мои заявки</h1>
+      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Мои заявки</h1>
       <div className="space-y-3">
         {items.map((r) => (
           <div
             key={r.registration_id}
-            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
           >
             <div>
               <p className="font-medium text-slate-800">{r.tournament.name}</p>
@@ -78,7 +78,7 @@ export default function RegistrationsPage() {
             {r.status === 'pending' && (
               <button
                 onClick={() => handleCancel(r.registration_id)}
-                className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
+                className="min-h-[44px] rounded-lg border border-red-200 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
               >
                 Отменить
               </button>

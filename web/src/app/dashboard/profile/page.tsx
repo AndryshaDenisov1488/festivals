@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">Профиль</h1>
+      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Профиль</h1>
       <div className="max-w-md space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div>
           <p className="text-sm text-slate-500">Имя</p>

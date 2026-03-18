@@ -39,13 +39,13 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-slate-800">Обзор</h1>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <h1 className="mb-4 text-xl font-semibold text-slate-800 md:mb-6 md:text-2xl">Обзор</h1>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {cards.map(({ href, label, icon: Icon, value }) => (
           <Link
             key={href}
             href={href}
-            className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
+            className="flex min-h-[88px] items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow active:bg-slate-50"
           >
             <div className="rounded-lg bg-slate-100 p-3">
               <Icon className="h-6 w-6 text-slate-600" />

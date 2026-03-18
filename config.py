@@ -42,5 +42,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bot_database.db")
 MAX_JUDGES_PER_TOURNAMENT = 15  # По умолчанию 15 судей
 MAX_MESSAGE_LENGTH = 4096       # Лимит символов в одном сообщении Telegram
 
+# Веб-портал судей (для ссылок в боте)
+WEB_PORTAL_URL = os.getenv("WEB_PORTAL_URL", "https://festsfs.ru")
+
 # Настройки мониторинга
 ENABLE_ERROR_MONITORING = True  # Включить мониторинг ошибок

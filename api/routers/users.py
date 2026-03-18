@@ -18,4 +18,5 @@ def get_me(user: User = Depends(get_current_user)):
         "category": user.category,
         "email": getattr(user, "email", None),
         "is_admin": user.user_id in ADMIN_IDS,
+        "has_password": getattr(user, "password_hash", None) is not None,
     }

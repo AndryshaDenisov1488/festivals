@@ -26,6 +26,7 @@ class User(Base):
     is_admin = Column(Boolean, nullable=False, default=False)
     email_verification_code = Column(String(20), nullable=True)
     email_verification_expires_at = Column(DateTime, nullable=True)
+    password_hash = Column(String(255), nullable=True)
 
     registrations = relationship("Registration", back_populates="user", cascade="all, delete-orphan")
     
