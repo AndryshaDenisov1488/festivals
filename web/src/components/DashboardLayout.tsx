@@ -62,7 +62,9 @@ function SetPasswordModal({
       onSuccess()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Ошибка сохранения'
-      setError(msg)
+      setError(msg.includes('500') || msg.includes('Internal Server')
+        ? 'Ошибка сервера. Возможно, база данных недоступна. Обратитесь к администратору.'
+        : msg)
     } finally {
       setLoading(false)
     }
