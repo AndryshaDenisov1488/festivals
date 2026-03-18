@@ -23,6 +23,7 @@ class User(Base):
     # Новые поля для веб-версии
     email = Column(String(255), nullable=True, unique=True, index=True)
     email_verified = Column(Boolean, nullable=False, default=False)
+    is_blocked = Column(Boolean, nullable=False, default=False)
     is_admin = Column(Boolean, nullable=False, default=False)
     email_verification_code = Column(String(20), nullable=True)
     email_verification_expires_at = Column(DateTime, nullable=True)

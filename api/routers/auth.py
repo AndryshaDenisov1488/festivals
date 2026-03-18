@@ -63,6 +63,8 @@ def verify_code(payload: AuthVerifyCodeIn):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")
         if expires_at and expires_at < now:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Code expired")
+        if getattr(user, "is_blocked", False):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт заблокирован")
 
         token_data = {"user_id": user.user_id, "exp": now + timedelta(hours=12)}
         access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -92,6 +94,8 @@ def login(payload: AuthLoginIn):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Неверный email или пароль",
             )
+        if getattr(user, "is_blocked", False):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт заблокирован")
         now = datetime.now(timezone.utc)
         token_data = {"user_id": user.user_id, "exp": now + timedelta(hours=12)}
         access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)

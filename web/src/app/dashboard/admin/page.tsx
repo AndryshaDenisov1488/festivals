@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X } from 'lucide-react'
+import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2 } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Budget = {
@@ -23,6 +23,23 @@ type AdminRegistration = {
   user_id: number
   user_name: string
   status: string
+}
+
+type AdminUser = {
+  user_id: number
+  first_name: string
+  last_name: string
+  function: string
+  category: string
+  email: string | null
+  is_blocked: boolean
+}
+
+type AdminTournament = {
+  tournament_id: number
+  name: string
+  date: string
+  month: string
 }
 
 export default function AdminPage() {
@@ -56,6 +73,20 @@ export default function AdminPage() {
     userName: string
     tournamentName: string
   } | null>(null)
+
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [usersSearch, setUsersSearch] = useState('')
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
+  const [userForm, setUserForm] = useState({ first_name: '', last_name: '', function: '', category: '', is_blocked: false })
+
+  const [tournaments, setTournaments] = useState<AdminTournament[]>([])
+  const [tournamentsMonthFilter, setTournamentsMonthFilter] = useState<MonthFilterValue>('all')
+  const [tournamentsSearch, setTournamentsSearch] = useState('')
+  const [tournamentsLoading, setTournamentsLoading] = useState(false)
+  const [showCreateTournament, setShowCreateTournament] = useState(false)
+  const [editingTournament, setEditingTournament] = useState<AdminTournament | null>(null)
+  const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: 'Апрель' })
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
@@ -93,6 +124,30 @@ export default function AdminPage() {
       .finally(() => setRegsLoading(false))
   }
 
+  const loadUsers = () => {
+    if (!token) return
+    setUsersLoading(true)
+    const params = new URLSearchParams()
+    if (usersSearch.trim()) params.set('search', usersSearch.trim())
+    api<AdminUser[]>(`/api/v1/admin/users?${params}`, { token })
+      .then(setUsers)
+      .catch(() => setUsers([]))
+      .finally(() => setUsersLoading(false))
+  }
+
+  const loadTournaments = () => {
+    if (!token) return
+    setTournamentsLoading(true)
+    const params = new URLSearchParams()
+    if (tournamentsMonthFilter === 'future') params.set('future_only', 'true')
+    else if (tournamentsMonthFilter !== 'all') params.set('month', tournamentsMonthFilter)
+    if (tournamentsSearch.trim()) params.set('search', tournamentsSearch.trim())
+    api<AdminTournament[]>(`/api/v1/admin/tournaments?${params}`, { token })
+      .then(setTournaments)
+      .catch(() => setTournaments([]))
+      .finally(() => setTournamentsLoading(false))
+  }
+
   useEffect(() => {
     loadBudgets()
   }, [token, budgetsMonthFilter])
@@ -101,6 +156,15 @@ export default function AdminPage() {
     const id = setTimeout(loadRegistrations, regsSearch ? 350 : 0)
     return () => clearTimeout(id)
   }, [token, regsFilter, regsMonthFilter, regsSearch])
+
+  useEffect(() => {
+    const id = setTimeout(loadUsers, usersSearch ? 350 : 0)
+    return () => clearTimeout(id)
+  }, [token, usersSearch])
+
+  useEffect(() => {
+    loadTournaments()
+  }, [token, tournamentsMonthFilter, tournamentsSearch])
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,6 +243,72 @@ export default function AdminPage() {
       alert(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setExportLoading(false)
+    }
+  }
+
+  const handleSaveUser = async () => {
+    if (!token || !editingUser) return
+    try {
+      await api(`/api/v1/admin/users/${editingUser.user_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          first_name: userForm.first_name,
+          last_name: userForm.last_name,
+          function: userForm.function,
+          category: userForm.category,
+          is_blocked: userForm.is_blocked
+        }),
+        token
+      })
+      setEditingUser(null)
+      loadUsers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    }
+  }
+
+  const handleCreateTournament = async () => {
+    if (!token || !tournamentForm.name || !tournamentForm.date) return
+    try {
+      await api('/api/v1/admin/tournaments', {
+        method: 'POST',
+        body: JSON.stringify(tournamentForm),
+        token
+      })
+      setShowCreateTournament(false)
+      setTournamentForm({ name: '', date: '', month: 'Апрель' })
+      loadTournaments()
+      loadBudgets()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    }
+  }
+
+  const handleSaveTournament = async () => {
+    if (!token || !editingTournament) return
+    try {
+      await api(`/api/v1/admin/tournaments/${editingTournament.tournament_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(tournamentForm),
+        token
+      })
+      setEditingTournament(null)
+      loadTournaments()
+      loadBudgets()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    }
+  }
+
+  const handleDeleteTournament = async (t: AdminTournament) => {
+    if (!confirm(`Удалить турнир «${t.name}» (${t.date})?`)) return
+    if (!token) return
+    try {
+      await api(`/api/v1/admin/tournaments/${t.tournament_id}`, { method: 'DELETE', token })
+      loadTournaments()
+      loadBudgets()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
     }
   }
 
@@ -267,6 +397,139 @@ export default function AdminPage() {
             </p>
           )}
         </form>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 font-medium text-slate-800">
+            <Trophy className="h-5 w-5" />
+            Турниры
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <MonthFilter value={tournamentsMonthFilter} onChange={setTournamentsMonthFilter} />
+            <button
+              onClick={() => setShowCreateTournament(true)}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Создать турнир
+            </button>
+          </div>
+        </div>
+        <input
+          type="search"
+          placeholder="Поиск по названию или месяцу..."
+          value={tournamentsSearch}
+          onChange={(e) => setTournamentsSearch(e.target.value)}
+          className="mb-3 min-h-[44px] w-full max-w-xs rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
+        />
+        {tournamentsLoading ? (
+          <div className="py-4 text-center text-slate-500">Загрузка...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="px-2 py-2 text-left">Название</th>
+                  <th className="px-2 py-2 text-left">Дата</th>
+                  <th className="px-2 py-2 text-left">Месяц</th>
+                  <th className="px-2 py-2 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tournaments.map((t) => (
+                  <tr key={t.tournament_id} className="border-b border-slate-100">
+                    <td className="px-2 py-2">{t.name}</td>
+                    <td className="px-2 py-2 text-slate-600">{t.date}</td>
+                    <td className="px-2 py-2 text-slate-600">{t.month}</td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        onClick={() => {
+                          setEditingTournament(t)
+                          const parts = t.date.split('.')
+                          const dateStr = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : t.date
+                          setTournamentForm({ name: t.name, date: dateStr, month: t.month })
+                        }}
+                        className="mr-2 rounded px-2 py-1 text-slate-600 hover:bg-slate-100"
+                        title="Изменить"
+                      >
+                        <Pencil className="inline h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTournament(t)}
+                        className="rounded px-2 py-1 text-red-600 hover:bg-red-50"
+                        title="Удалить"
+                      >
+                        <Trash2 className="inline h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {tournaments.length === 0 && <p className="py-4 text-center text-slate-500">Нет турниров</p>}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="flex items-center gap-2 font-medium text-slate-800">
+            <Users className="h-5 w-5" />
+            Пользователи
+          </h2>
+          <input
+            type="search"
+            placeholder="Поиск по имени или функции..."
+            value={usersSearch}
+            onChange={(e) => setUsersSearch(e.target.value)}
+            className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
+          />
+        </div>
+        {usersLoading ? (
+          <div className="py-4 text-center text-slate-500">Загрузка...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="px-2 py-2 text-left">Имя</th>
+                  <th className="px-2 py-2 text-left">Функция</th>
+                  <th className="px-2 py-2 text-left">Категория</th>
+                  <th className="px-2 py-2 text-left">Email</th>
+                  <th className="px-2 py-2 text-left">Статус</th>
+                  <th className="px-2 py-2 text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.user_id} className={`border-b border-slate-100 ${u.is_blocked ? 'bg-red-50' : ''}`}>
+                    <td className="px-2 py-2">{u.first_name} {u.last_name}</td>
+                    <td className="px-2 py-2 text-slate-600">{u.function}</td>
+                    <td className="px-2 py-2 text-slate-600">{u.category}</td>
+                    <td className="px-2 py-2 text-slate-600">{u.email || '—'}</td>
+                    <td className="px-2 py-2">
+                      {u.is_blocked ? <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-800">Заблокирован</span> : <span className="text-slate-500">Активен</span>}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        onClick={() => {
+                          setEditingUser(u)
+                          setUserForm({ first_name: u.first_name, last_name: u.last_name, function: u.function, category: u.category, is_blocked: u.is_blocked })
+                        }}
+                        className="rounded px-2 py-1 text-slate-600 hover:bg-slate-100"
+                        title="Изменить"
+                      >
+                        <Pencil className="inline h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {users.length === 0 && <p className="py-4 text-center text-slate-500">Нет пользователей</p>}
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -485,6 +748,96 @@ export default function AdminPage() {
           </div>
         </div>
       </section>
+
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditingUser(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 font-semibold text-slate-800">Редактировать пользователя</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Имя</label>
+                <input value={userForm.first_name} onChange={(e) => setUserForm((f) => ({ ...f, first_name: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Фамилия</label>
+                <input value={userForm.last_name} onChange={(e) => setUserForm((f) => ({ ...f, last_name: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Функция</label>
+                <input value={userForm.function} onChange={(e) => setUserForm((f) => ({ ...f, function: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Категория</label>
+                <input value={userForm.category} onChange={(e) => setUserForm((f) => ({ ...f, category: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={userForm.is_blocked} onChange={(e) => setUserForm((f) => ({ ...f, is_blocked: e.target.checked }))} />
+                <span className="text-sm text-red-600">Заблокировать</span>
+              </label>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={handleSaveUser} className="rounded-lg bg-slate-800 px-4 py-2 text-white hover:bg-slate-700">Сохранить</button>
+              <button onClick={() => setEditingUser(null)} className="rounded-lg border px-4 py-2">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateTournament && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowCreateTournament(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 font-semibold text-slate-800">Создать турнир</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Название</label>
+                <input value={tournamentForm.name} onChange={(e) => setTournamentForm((f) => ({ ...f, name: e.target.value }))} placeholder="Арена Плей Север" className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Дата (YYYY-MM-DD)</label>
+                <input type="date" value={tournamentForm.date} onChange={(e) => setTournamentForm((f) => ({ ...f, date: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Месяц</label>
+                <select value={tournamentForm.month} onChange={(e) => setTournamentForm((f) => ({ ...f, month: e.target.value }))} className="w-full rounded-lg border px-3 py-2">
+                  {['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'].map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={handleCreateTournament} className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">Создать</button>
+              <button onClick={() => setShowCreateTournament(false)} className="rounded-lg border px-4 py-2">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingTournament && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEditingTournament(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 font-semibold text-slate-800">Изменить турнир</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Название</label>
+                <input value={tournamentForm.name} onChange={(e) => setTournamentForm((f) => ({ ...f, name: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Дата (YYYY-MM-DD)</label>
+                <input type="date" value={tournamentForm.date} onChange={(e) => setTournamentForm((f) => ({ ...f, date: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-slate-600">Месяц</label>
+                <select value={tournamentForm.month} onChange={(e) => setTournamentForm((f) => ({ ...f, month: e.target.value }))} className="w-full rounded-lg border px-3 py-2">
+                  {['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'].map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={handleSaveTournament} className="rounded-lg bg-slate-800 px-4 py-2 text-white hover:bg-slate-700">Сохранить</button>
+              <button onClick={() => setEditingTournament(null)} className="rounded-lg border px-4 py-2">Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
