@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
-import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2, ChevronDown, ChevronRight, Wallet, Mail } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Budget = {
@@ -70,6 +70,35 @@ export default function AdminPage() {
   const [exportYear, setExportYear] = useState('')
   const [exportLoading, setExportLoading] = useState(false)
 
+  type JudgeEarnings = {
+    user_id: number
+    user_name: string
+    email: string
+    total_tournaments: number
+    with_amount: number
+    without_amount: number
+    total_amount: number
+    tournaments: Array<{
+      payment_id: number
+      tournament_name: string
+      tournament_date: string
+      tournament_month: string
+      amount: number | null
+      is_paid: boolean
+    }>
+    without_amount_list: Array<{
+      payment_id: number
+      tournament_name: string
+      tournament_date: string
+    }>
+  }
+  const [earnings, setEarnings] = useState<JudgeEarnings[]>([])
+  const [earningsLoading, setEarningsLoading] = useState(false)
+  const [earningsSearch, setEarningsSearch] = useState('')
+  const [expandedEarningsIds, setExpandedEarningsIds] = useState<Set<number>>(new Set())
+  const [expandedEarningsSumIds, setExpandedEarningsSumIds] = useState<Set<number>>(new Set())
+  const [earningsRequestLoading, setEarningsRequestLoading] = useState<number | null>(null)
+
   const [resultToast, setResultToast] = useState<{
     type: 'approved' | 'rejected'
     userName: string
@@ -89,7 +118,7 @@ export default function AdminPage() {
   const [showCreateTournament, setShowCreateTournament] = useState(false)
   const [createTournamentLoading, setCreateTournamentLoading] = useState(false)
   const [successToast, setSuccessToast] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'registrations' | 'tournaments' | 'users' | 'budgets' | 'broadcast' | 'export'>('registrations')
+  const [activeTab, setActiveTab] = useState<'registrations' | 'tournaments' | 'users' | 'budgets' | 'earnings' | 'broadcast' | 'export'>('registrations')
   const [editingTournament, setEditingTournament] = useState<AdminTournament | null>(null)
   const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: '' })
 
@@ -156,6 +185,17 @@ export default function AdminPage() {
       .finally(() => setUsersLoading(false))
   }
 
+  const loadEarnings = () => {
+    if (!token) return
+    setEarningsLoading(true)
+    const params = new URLSearchParams()
+    if (earningsSearch.trim()) params.set('search', earningsSearch.trim())
+    api<JudgeEarnings[]>(`/api/v1/admin/earnings?${params}`, { token })
+      .then(setEarnings)
+      .catch(() => setEarnings([]))
+      .finally(() => setEarningsLoading(false))
+  }
+
   const loadTournaments = () => {
     if (!token) return
     setTournamentsLoading(true)
@@ -187,6 +227,13 @@ export default function AdminPage() {
     const id = setTimeout(loadTournaments, tournamentsSearch ? 200 : 0)
     return () => clearTimeout(id)
   }, [token, tournamentsMonthFilter, tournamentsSearch])
+
+  useEffect(() => {
+    if (activeTab === 'earnings' && token) {
+      const id = setTimeout(loadEarnings, earningsSearch ? 200 : 0)
+      return () => clearTimeout(id)
+    }
+  }, [token, earningsSearch, activeTab])
 
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -374,6 +421,23 @@ export default function AdminPage() {
     }
   }
 
+  const handleEarningsRequest = async (paymentIds: number[]) => {
+    if (!token || paymentIds.length === 0) return
+    setEarningsRequestLoading(paymentIds[0])
+    try {
+      await api('/api/v1/admin/earnings/request', {
+        method: 'POST',
+        body: JSON.stringify({ payment_ids: paymentIds }),
+        token
+      })
+      showSuccess('Запрос отправлен судье')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setEarningsRequestLoading(null)
+    }
+  }
+
   const handleExportYear = async () => {
     if (!exportYear || !token) return
     setExportLoading(true)
@@ -454,6 +518,7 @@ export default function AdminPage() {
           { id: 'tournaments' as const, label: 'Турниры', icon: Trophy },
           { id: 'users' as const, label: 'Пользователи', icon: Users },
           { id: 'budgets' as const, label: 'Бюджеты', icon: DollarSign },
+          { id: 'earnings' as const, label: 'Заработок судей', icon: Wallet },
           { id: 'broadcast' as const, label: 'Рассылка', icon: Send },
           { id: 'export' as const, label: 'Экспорт', icon: FileSpreadsheet }
         ].map(({ id, label, icon: Icon }) => (
@@ -745,6 +810,130 @@ export default function AdminPage() {
             </table>
             {budgets.length === 0 && (
               <p className="py-4 text-center text-slate-500">Нет бюджетов</p>
+            )}
+          </div>
+        )}
+      </section>
+      )}
+
+      {activeTab === 'earnings' && (
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 flex items-center gap-2 font-medium text-slate-800">
+          <Wallet className="h-5 w-5" />
+          Заработок судей
+        </h2>
+        <input
+          type="search"
+          placeholder="Поиск: имя судьи, турнир..."
+          value={earningsSearch}
+          onChange={(e) => setEarningsSearch(e.target.value)}
+          aria-label="Поиск"
+          className="mb-4 min-h-[44px] w-full max-w-md rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        />
+        {earningsLoading ? (
+          <div className="py-4 text-center text-slate-500">Загрузка...</div>
+        ) : (
+          <div className="space-y-2">
+            {earnings.map((j) => {
+              const isExpanded = expandedEarningsIds.has(j.user_id)
+              const isSumExpanded = expandedEarningsSumIds.has(j.user_id)
+              const monthlyMap = j.tournaments.reduce<Record<string, { sum: number; count: number }>>((acc, t) => {
+                if (t.amount == null) return acc
+                const m = t.tournament_date?.slice(3, 10) || ''
+                if (!acc[m]) acc[m] = { sum: 0, count: 0 }
+                acc[m].sum += t.amount
+                acc[m].count += 1
+                return acc
+              }, {})
+              const monthlyList = Object.entries(monthlyMap)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([k, v]) => {
+                  const [mm, yy] = k.split('.')
+                  const monthName = MONTH_NAMES[parseInt(mm || '1', 10) - 1] || mm
+                  return { label: `${monthName} ${yy}`, ...v }
+                })
+              return (
+                <div key={j.user_id} className="overflow-hidden rounded-lg border border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-1 items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEarningsIds((p) => { const n = new Set(p); if (n.has(j.user_id)) n.delete(j.user_id); else n.add(j.user_id); return n })}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        {isExpanded ? <ChevronDown className="h-5 w-5 text-slate-500" /> : <ChevronRight className="h-5 w-5 text-slate-500" />}
+                        <span className="font-medium text-slate-800">{j.user_name}</span>
+                      </button>
+                      <span className="text-sm text-slate-500">
+                        Турниров: {j.total_tournaments} · Указано: {j.with_amount} · Не указано: {j.without_amount}
+                      </span>
+                      {j.without_amount > 0 && (
+                        <button
+                          onClick={() => handleEarningsRequest(j.without_amount_list.map((x) => x.payment_id))}
+                          disabled={earningsRequestLoading !== null}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          <Mail className="h-4 w-4" />
+                          {earningsRequestLoading ? 'Отправка...' : 'Отправить запрос'}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedEarningsSumIds((p) => { const n = new Set(p); if (n.has(j.user_id)) n.delete(j.user_id); else n.add(j.user_id); return n })}
+                      className="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-200"
+                    >
+                      {j.total_amount.toFixed(0)} ₽
+                    </button>
+                  </div>
+                  {isSumExpanded && monthlyList.length > 0 && (
+                    <div className="border-t border-slate-200 bg-emerald-50/50 px-4 py-3">
+                      <p className="mb-2 text-sm font-medium text-slate-700">Разбивка по месяцам</p>
+                      <div className="flex flex-wrap gap-3">
+                        {monthlyList.map(({ label, sum, count }) => (
+                          <span key={label} className="rounded bg-white px-3 py-1.5 text-sm shadow-sm">
+                            {label} — {sum.toFixed(0)} ₽ ({count} турн.)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isExpanded && (
+                    <div className="border-t border-slate-200 bg-white">
+                      {j.tournaments.map((t) => (
+                        <div
+                          key={t.payment_id}
+                          className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="pl-8">
+                            <p className="font-medium text-slate-800">{t.tournament_name}</p>
+                            <p className="text-sm text-slate-500">
+                              {t.tournament_date} · {t.tournament_month}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 pl-8">
+                            {t.amount != null ? (
+                              <span className="font-medium text-emerald-700">{t.amount.toFixed(0)} ₽</span>
+                            ) : (
+                              <button
+                                onClick={() => handleEarningsRequest([t.payment_id])}
+                                disabled={earningsRequestLoading !== null}
+                                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                              >
+                                <Mail className="h-4 w-4" />
+                                {earningsRequestLoading === t.payment_id ? 'Отправка...' : 'Отправить запрос'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {earnings.length === 0 && (
+              <p className="py-4 text-center text-slate-500">Нет данных</p>
             )}
           </div>
         )}

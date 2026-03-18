@@ -303,6 +303,55 @@ def send_tournament_deleted_email(email: str, tournament_name: str, tournament_m
     send_email(email, subject, text, html)
 
 
+def send_earnings_request_email(email: str, user_name: str, tournaments: list) -> None:
+    """Запрос судье указать заработок за турнир(ы). tournaments = [(name, date), ...]"""
+    if not tournaments:
+        return
+    if len(tournaments) == 1:
+        t_name, t_date = tournaments[0]
+        subject = f"Укажите заработок: {t_name}"
+        text = (
+            f"Привет, {user_name}!\n\n"
+            f"Пожалуйста, укажите ваш заработок за турнир «{t_name}» ({t_date}).\n\n"
+            "Сделайте это в Telegram-боте или на веб-портале."
+        )
+        list_html = f"<p style='margin:0;font-size:16px;font-weight:600;color:#1e40af;'>{t_name}</p><p style='margin:8px 0 0;font-size:14px;color:#2563eb;'>{t_date}</p>"
+    else:
+        subject = "Укажите заработок за турниры"
+        text = (
+            f"Привет, {user_name}!\n\n"
+            "Пожалуйста, укажите ваш заработок за следующие турниры:\n\n"
+            + "\n".join(f"• {t[0]} ({t[1]})" for t in tournaments)
+            + "\n\nСделайте это в Telegram-боте или на веб-портале."
+        )
+        list_html = "".join(
+            f"<div style='margin-bottom:12px;'><p style='margin:0;font-size:14px;font-weight:600;color:#1e40af;'>{t[0]}</p><p style='margin:4px 0 0;font-size:13px;color:#64748b;'>{t[1]}</p></div>"
+            for t in tournaments
+        )
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#dbeafe;border-radius:50%;line-height:56px;font-size:28px;">💰</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Укажите заработок
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
+        Привет, {user_name}!
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#64748b;">
+        Пожалуйста, укажите ваш заработок за {"турнир" if len(tournaments) == 1 else "турниры"}:
+      </p>
+      <div style="background:#eff6ff;border-radius:12px;padding:20px;margin:24px 0;border-left:4px solid #3b82f6;">
+        {list_html}
+      </div>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;text-align:center;">
+        Сделайте это в Telegram-боте или на веб-портале.
+      </p>
+    """
+    html = _base_html("Укажите заработок", content, accent_color="#2563eb")
+    send_email(email, subject, text, html)
+
+
 def send_tournament_reminder_email(email: str, tournament_name: str, tournament_date: str) -> None:
     subject = f"Напоминание: турнир завтра — {tournament_name}"
     text = (

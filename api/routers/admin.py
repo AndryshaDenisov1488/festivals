@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
 from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
@@ -495,6 +496,145 @@ async def admin_update_tournament(
         db.refresh(t)
         await _notify_tournament_change(old_name, old_date, old_month, t.name, t.date, t.month)
         return
+    finally:
+        db.close()
+
+
+@router.get("/earnings")
+def admin_earnings_list(
+    future_only: bool = Query(False, description="Только будущие турниры"),
+    search: Optional[str] = Query(None),
+    admin: User = Depends(get_current_admin),
+):
+    """Список судей с заработком: турниры, указано/не указано, сумма."""
+    db = SessionLocal()
+    try:
+        q = (
+            db.query(User, JudgePayment, Tournament)
+            .join(JudgePayment, JudgePayment.user_id == User.user_id)
+            .join(Tournament, JudgePayment.tournament_id == Tournament.tournament_id)
+        )
+        if future_only:
+            q = q.filter(Tournament.date >= get_today())
+        rows = q.order_by(User.last_name, Tournament.date.desc()).all()
+        if search and search.strip():
+            term = search.strip().lower()
+            rows = [
+                r for r in rows
+                if term in (r[0].first_name or "").lower()
+                or term in (r[0].last_name or "").lower()
+                or term in (r[2].name or "").lower()
+            ]
+        by_user: dict[int, dict] = {}
+        for user, payment, tournament in rows:
+            if user.user_id not in by_user:
+                by_user[user.user_id] = {
+                    "user_id": user.user_id,
+                    "user_name": f"{user.first_name} {user.last_name}",
+                    "email": user.email or "",
+                    "total_tournaments": 0,
+                    "with_amount": 0,
+                    "without_amount": 0,
+                    "total_amount": 0.0,
+                    "tournaments": [],
+                    "without_amount_list": [],
+                }
+            d = by_user[user.user_id]
+            d["total_tournaments"] += 1
+            t_info = {
+                "payment_id": payment.payment_id,
+                "tournament_name": tournament.name,
+                "tournament_date": format_date(tournament.date),
+                "tournament_month": tournament.month,
+                "amount": payment.amount,
+                "is_paid": payment.is_paid,
+            }
+            d["tournaments"].append(t_info)
+            if payment.amount is not None:
+                d["with_amount"] += 1
+                d["total_amount"] += payment.amount
+            else:
+                d["without_amount"] += 1
+                d["without_amount_list"].append({
+                    "payment_id": payment.payment_id,
+                    "tournament_name": tournament.name,
+                    "tournament_date": format_date(tournament.date),
+                })
+        result = list(by_user.values())
+        for r in result:
+            r["tournaments"].sort(key=lambda x: x["tournament_date"] or "", reverse=True)
+        return sorted(result, key=lambda x: x["user_name"])
+    finally:
+        db.close()
+
+
+class EarningsRequestIn(BaseModel):
+    payment_ids: list[int]
+
+
+@router.post("/earnings/request")
+async def admin_earnings_request(
+    payload: EarningsRequestIn,
+    admin: User = Depends(get_current_admin),
+):
+    """Отправить судье запрос указать заработок (бот + email)."""
+    if not payload.payment_ids:
+        raise HTTPException(status_code=400, detail="payment_ids required")
+    db = SessionLocal()
+    try:
+        payments = (
+            db.query(JudgePayment, Tournament, User)
+            .join(Tournament, JudgePayment.tournament_id == Tournament.tournament_id)
+            .join(User, JudgePayment.user_id == User.user_id)
+            .filter(JudgePayment.payment_id.in_(payload.payment_ids))
+            .all()
+        )
+        if not payments:
+            raise HTTPException(status_code=404, detail="Payments not found")
+        by_user: dict[int, list] = {}
+        for p, t, u in payments:
+            if p.amount is not None:
+                continue
+            if u.user_id not in by_user:
+                by_user[u.user_id] = []
+            by_user[u.user_id].append((u, t))
+        if not by_user:
+            return {"sent": 0, "message": "Все суммы уже указаны"}
+        import asyncio
+        from aiogram import Bot
+        bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
+        sent = 0
+        for user_id, items in by_user.items():
+            user = items[0][0]
+            tournaments = [(t.name, format_date(t.date)) for _, t in items]
+            if len(tournaments) == 1:
+                msg = (
+                    f"💰 <b>Укажите заработок</b>\n\n"
+                    f"Пожалуйста, укажите ваш заработок за турнир <b>{tournaments[0][0]}</b> ({tournaments[0][1]}).\n\n"
+                    "Сделайте это в боте или на веб-портале."
+                )
+            else:
+                lines = "\n".join(f"• {n} ({d})" for n, d in tournaments)
+                msg = (
+                    f"💰 <b>Укажите заработок</b>\n\n"
+                    f"Пожалуйста, укажите ваш заработок за турниры:\n\n{lines}\n\n"
+                    "Сделайте это в боте или на веб-портале."
+                )
+            if bot:
+                try:
+                    await bot.send_message(user.user_id, msg, parse_mode="HTML")
+                    sent += 1
+                    await asyncio.sleep(0.05)
+                except Exception as e:
+                    logger.exception("Earnings request to %s: %s", user.user_id, e)
+            if user.email:
+                try:
+                    from api.email_service import send_earnings_request_email
+                    send_earnings_request_email(user.email, f"{user.first_name} {user.last_name}", tournaments)
+                    sent += 1
+                except Exception as e:
+                    logger.exception("Earnings request email to %s: %s", user.email, e)
+        return {"sent": sent}
     finally:
         db.close()
 
