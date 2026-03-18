@@ -9,6 +9,7 @@ from models import Tournament
 from api.dependencies import get_db, get_current_user
 from api.utils import format_date
 from models import User
+from utils.date_utils import get_today
 
 
 router = APIRouter()
@@ -28,7 +29,7 @@ def list_tournaments(
     if month:
         q = q.filter(Tournament.month == month)
     if future_only:
-        q = q.filter(Tournament.date >= date.today())
+        q = q.filter(Tournament.date >= get_today())
     if from_date:
         q = q.filter(Tournament.date >= from_date)
     if to_date:

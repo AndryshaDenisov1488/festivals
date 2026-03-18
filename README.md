@@ -54,7 +54,24 @@ npm run build
 cd ..
 ```
 
-### 3. Переменные окружения (.env)
+### 3. База данных
+
+БД по умолчанию: `bot_database.db` в корне проекта (абсолютный путь — бот и API используют один файл).
+
+**Восстановление из старого проекта или бэкапа:**
+```bash
+# Останови бота и API (и старый бот, если он ещё работает)
+sudo systemctl stop judges-bot judges-api
+
+# Восстанови БД — копирует .db, .db-shm, .db-wal (важно для WAL!)
+python restore_database.py /path/to/judges_bot_v2_old/bot_database.db
+
+# Запусти снова
+sudo systemctl start judges-bot judges-api
+```
+Скрипт копирует и WAL-файлы (`-shm`, `-wal`) — в них могут быть последние данные.
+
+### 4. Переменные окружения (.env)
 
 Создай файл `.env` в корне проекта:
 
@@ -62,7 +79,7 @@ cd ..
 BOT_TOKEN=...
 ADMIN_IDS=123456789
 CHANNEL_ID=-100...
-DATABASE_URL=sqlite:///bot_database.db
+# DATABASE_URL можно не указывать — по умолчанию bot_database.db в корне проекта
 
 # Для входа в веб (SMTP)
 SMTP_HOST=smtp.example.com
@@ -78,7 +95,7 @@ ADMIN_EMAIL=admin@example.com
 JWT_SECRET=your-random-secret
 ```
 
-### 4. Сборка Web с правильным API URL
+### 5. Сборка Web с правильным API URL
 
 Перед `npm run build` задай `NEXT_PUBLIC_API_URL`:
 
@@ -92,7 +109,7 @@ NEXT_PUBLIC_API_URL="" npm run build   # для nginx
 NEXT_PUBLIC_API_URL=http://192.168.1.10:8101 npm run build   # без nginx
 ```
 
-### 5. Systemd
+### 6. Systemd
 
 Скопируй unit-файлы и замени `YOUR_USER` на имя пользователя:
 
@@ -115,7 +132,7 @@ sudo systemctl start judges-bot judges-api judges-web
 sudo systemctl status judges-bot judges-api judges-web
 ```
 
-### 6. Nginx (опционально)
+### 7. Nginx (опционально)
 
 Если нужен домен и HTTPS:
 

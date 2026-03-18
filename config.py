@@ -38,7 +38,10 @@ except ValueError as e:
     raise
 
 # Настройки базы данных
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bot_database.db")
+# Абсолютный путь — бот и API всегда используют одну и ту же БД
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_DB_PATH = os.path.join(_PROJECT_ROOT, "bot_database.db").replace("\\", "/")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_DEFAULT_DB_PATH}")
 
 # Другие настройки
 MAX_JUDGES_PER_TOURNAMENT = 15  # По умолчанию 15 судей

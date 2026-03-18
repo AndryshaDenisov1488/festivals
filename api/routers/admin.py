@@ -61,7 +61,8 @@ def admin_list_registrations(
         if month:
             q = q.filter(Tournament.month == month)
         if future_only:
-            q = q.filter(Tournament.date >= date.today())
+            from utils.date_utils import get_today
+            q = q.filter(Tournament.date >= get_today())
         if status:
             q = q.filter(Registration.status == status)
         if search and search.strip():

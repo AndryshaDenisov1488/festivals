@@ -27,7 +27,8 @@ async def list_budgets(
     if month:
         data = [item for item in data if item.get("tournament_month") == month]
     if future_only:
-        today = date.today()
+        from utils.date_utils import get_today
+        today = get_today()
         data = [item for item in data if item.get("tournament_date") and item["tournament_date"] >= today]
     return [
         {
