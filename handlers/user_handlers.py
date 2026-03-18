@@ -300,7 +300,10 @@ async def process_link_email_code(message: types.Message, state: FSMContext):
             await message.answer("❌ Неверный код. Проверьте и введите снова.")
             return
         now = datetime.now(timezone.utc)
-        if user.email_verification_expires_at and user.email_verification_expires_at < now:
+        expires_at = user.email_verification_expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at and expires_at < now:
             await message.answer("❌ Код истёк. Начните заново: нажмите «Привязать email».")
             await state.finish()
             return
