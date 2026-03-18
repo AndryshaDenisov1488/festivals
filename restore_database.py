@@ -50,13 +50,12 @@ def main():
                 shutil.copy2(p, os.path.join(backup_dir, os.path.basename(p)))
         print(f"📦 Бэкап текущей БД: {backup_dir}")
 
-    src_base = source.replace("-shm", "").replace("-wal", "")
-    if not src_base.endswith(".db"):
-        src_base = source
-    else:
-        src_base = source[:-3]
+    # SQLite WAL: main=file.db, shm=file.db-shm, wal=file.db-wal
+    src_main = source.replace("-shm", "").replace("-wal", "").rstrip("/")
+    if not src_main.endswith(".db"):
+        src_main = source
     for suf in ("", "-shm", "-wal"):
-        src = src_base + (".db" if suf == "" else suf)
+        src = src_main + ("" if suf == "" else suf)
         tgt = target + ("" if suf == "" else suf)
         if os.path.exists(src):
             shutil.copy2(src, tgt)
