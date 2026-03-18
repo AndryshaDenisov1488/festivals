@@ -85,7 +85,7 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         logger.exception("Ошибка отправки в Telegram-канал: %s", e)
 
 
-async def _notify_channel_cancel_registration(user_name: str, tournament_str: str) -> None:
+async def _notify_channel_cancel_registration(user_name: str, tournament_str: str, previous_status: str) -> None:
     """Отправляет уведомление об отмене заявки в Telegram-канал."""
     from config import BOT_TOKEN
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -98,7 +98,8 @@ async def _notify_channel_cancel_registration(user_name: str, tournament_str: st
             CHANNEL_ID,
             "❌ <b>Заявка отменена</b>\n"
             f"👤 <b>{user_name}</b>\n"
-            f"Турнир: <b>{tournament_str}</b>",
+            f"Турнир: <b>{tournament_str}</b>\n"
+            f"Предыдущий статус: {previous_status}",
             parse_mode="HTML"
         )
         logger.info("Уведомление об отмене в канал отправлено: %s, %s", user_name, tournament_str)
@@ -179,6 +180,12 @@ async def cancel_registration(
 
     user_name = f"{user.first_name} {user.last_name}"
     tournament_str = f"{format_date(reg.tournament.date)} {reg.tournament.name}"
+    status_i18n = {
+        RegistrationStatus.PENDING: "На рассмотрении",
+        RegistrationStatus.APPROVED: "Одобрено",
+        RegistrationStatus.REJECTED: "Отклонено"
+    }
+    previous_status = status_i18n.get(reg.status, reg.status)
 
     db.query(JudgePayment).filter(
         JudgePayment.user_id == user.user_id,
@@ -187,5 +194,5 @@ async def cancel_registration(
     db.delete(reg)
     db.commit()
 
-    await _notify_channel_cancel_registration(user_name, tournament_str)
+    await _notify_channel_cancel_registration(user_name, tournament_str, previous_status)
     return None

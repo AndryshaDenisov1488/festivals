@@ -611,17 +611,19 @@ async def process_confirm_cancel(callback_query: types.CallbackQuery):
         )
 
         if CHANNEL_ID:
-            # словарь перевода
             STATUS_I18N = {
-                RegistrationStatus.PENDING:  "На рассмотрении",
+                RegistrationStatus.PENDING: "На рассмотрении",
                 RegistrationStatus.APPROVED: "Одобрено",
                 RegistrationStatus.REJECTED: "Отклонено"
             }
-            status_text = STATUS_I18N.get(registration.status, registration.status)
+            status_text = STATUS_I18N.get(old_status, old_status)
+            tournament_str = f"{t.date.strftime('%d.%m.%Y')} {t.name}"
             await callback_query.bot.send_message(
                 CHANNEL_ID,
-                f"ℹ️ <b>{user.first_name} {user.last_name}</b> отменил запись на турнир "
-                f"<b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> (предыдущий статус: {status_text}).",
+                "❌ <b>Заявка отменена</b>\n"
+                f"👤 <b>{user.first_name} {user.last_name}</b>\n"
+                f"Турнир: <b>{tournament_str}</b>\n"
+                f"Предыдущий статус: {status_text}",
                 parse_mode=ParseMode.HTML
             )
     except SQLAlchemyError as e:
