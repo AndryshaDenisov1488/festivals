@@ -87,7 +87,7 @@ def admin_list_registrations(
             q = q.filter(Tournament.date >= get_today())
         if status:
             q = q.filter(Registration.status == status)
-        q = q.order_by(Tournament.date.desc(), Registration.registration_id)
+        q = q.order_by(Tournament.date.asc(), Registration.registration_id)
         regs = q.all()
         if search and search.strip():
             regs = [
@@ -382,15 +382,14 @@ async def admin_create_tournament(
         from services.payment_system import PaymentSystem
         ps = PaymentSystem(bot=None)
         await ps.create_payment_records(t.tournament_id)
+        formatted = f"{format_date(t.date)} {t.name}"
+        users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
         if BOT_TOKEN:
             try:
                 from aiogram import Bot
-                bot = Bot(token=BOT_TOKEN)
-                formatted = f"{format_date(t.date)} {t.name}"
                 import asyncio
-                for u in db.query(User).all():
-                    if getattr(u, "is_blocked", False):
-                        continue
+                bot = Bot(token=BOT_TOKEN)
+                for u in users:
                     try:
                         await bot.send_message(u.user_id, f"🆕 Добавлен турнир <b>{formatted}</b> в <b>{t.month}</b>.", parse_mode="HTML")
                         await asyncio.sleep(0.05)
@@ -398,6 +397,13 @@ async def admin_create_tournament(
                         pass
             except Exception as e:
                 logger.exception("Notify new tournament: %s", e)
+        for u in users:
+            if u.email:
+                try:
+                    from api.email_service import send_tournament_added_email
+                    send_tournament_added_email(u.email, t.name, format_date(t.date), t.month)
+                except Exception as e:
+                    logger.exception("Email new tournament to %s: %s", u.email, e)
         return {
             "tournament_id": t.tournament_id,
             "name": t.name,
@@ -408,8 +414,62 @@ async def admin_create_tournament(
         db.close()
 
 
+async def _notify_tournament_change(
+    old_name: str,
+    old_date: date,
+    old_month: str,
+    new_name: str,
+    new_date: date,
+    new_month: str,
+) -> None:
+    """Отправляет уведомление об изменении турнира всем пользователям (бот + email)."""
+    changes_html = []
+    changes_plain = []
+    if old_date != new_date:
+        s = f"{old_date.strftime('%d.%m.%Y')} → {new_date.strftime('%d.%m.%Y')}"
+        changes_html.append(f"📅 <b>Дата:</b> {s}")
+        changes_plain.append(f"Дата: {s}")
+    if old_name != new_name:
+        changes_html.append(f"🏆 <b>Название:</b> {old_name} → {new_name}")
+        changes_plain.append(f"Название: {old_name} → {new_name}")
+    if old_month != new_month:
+        changes_html.append(f"📆 <b>Месяц:</b> {old_month} → {new_month}")
+        changes_plain.append(f"Месяц: {old_month} → {new_month}")
+    if not changes_html:
+        return
+    import asyncio
+    db = SessionLocal()
+    try:
+        users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
+        if BOT_TOKEN:
+            from aiogram import Bot
+            bot = Bot(token=BOT_TOKEN)
+            message = (
+                "🔄 <b>Турнир изменён</b>\n\n"
+                f"🏆 <b>Турнир:</b> {new_date.strftime('%d.%m.%Y')} {new_name}\n\n"
+                "📝 <b>Изменения:</b>\n" + "\n".join(f"• {c}" for c in changes_html)
+            )
+            for u in users:
+                try:
+                    await bot.send_message(u.user_id, message, parse_mode="HTML")
+                    await asyncio.sleep(0.05)
+                except Exception:
+                    pass
+        for u in users:
+            if u.email:
+                try:
+                    from api.email_service import send_tournament_changed_email
+                    send_tournament_changed_email(u.email, new_name, new_date.strftime('%d.%m.%Y'), changes_plain)
+                except Exception as e:
+                    logger.exception("Email tournament change to %s: %s", u.email, e)
+    except Exception as e:
+        logger.exception("Notify tournament change: %s", e)
+    finally:
+        db.close()
+
+
 @router.patch("/tournaments/{tournament_id}", status_code=204)
-def admin_update_tournament(
+async def admin_update_tournament(
     tournament_id: int,
     payload: TournamentUpdateIn,
     admin: User = Depends(get_current_admin),
@@ -419,6 +479,7 @@ def admin_update_tournament(
         t = db.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        old_name, old_date, old_month = t.name, t.date, t.month
         if payload.name is not None:
             t.name = payload.name.strip()
         if payload.date is not None:
@@ -431,13 +492,15 @@ def admin_update_tournament(
         elif payload.month is not None:
             t.month = payload.month.strip()
         db.commit()
+        db.refresh(t)
+        await _notify_tournament_change(old_name, old_date, old_month, t.name, t.date, t.month)
         return
     finally:
         db.close()
 
 
 @router.delete("/tournaments/{tournament_id}", status_code=204)
-def admin_delete_tournament(
+async def admin_delete_tournament(
     tournament_id: int,
     admin: User = Depends(get_current_admin),
 ):
@@ -446,8 +509,29 @@ def admin_delete_tournament(
         t = db.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        title = f"{format_date(t.date)} {t.name}"
+        month = t.month
         db.delete(t)
         db.commit()
+        users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
+        if BOT_TOKEN:
+            import asyncio
+            from aiogram import Bot
+            bot = Bot(token=BOT_TOKEN)
+            msg = f"❗️ Турнир «{title}» ({month}) удалён админом."
+            for u in users:
+                try:
+                    await bot.send_message(u.user_id, msg)
+                    await asyncio.sleep(0.05)
+                except Exception:
+                    pass
+        for u in users:
+            if u.email:
+                try:
+                    from api.email_service import send_tournament_deleted_email
+                    send_tournament_deleted_email(u.email, title, month)
+                except Exception as e:
+                    logger.exception("Email tournament deleted to %s: %s", u.email, e)
         return
     finally:
         db.close()

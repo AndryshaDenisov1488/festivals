@@ -122,7 +122,7 @@ async def reminder_job():
                     f"Если ваши планы поменялись, напишите Андрюше."
                 )
                 try:
-                    await bot.send_message(user.user_id, text)
+                    await bot.send_message(user.user_id, text, parse_mode="HTML")
                     logger.info("[reminder_job] Sent reminder to user_id=%s", user.user_id)
                 except Exception as e:
                     logger.error("[reminder_job] Could not send to user_id=%s: %s", user.user_id, e)

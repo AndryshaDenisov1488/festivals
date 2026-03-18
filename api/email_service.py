@@ -237,6 +237,53 @@ def send_payment_reminder_email(email: str, user_name: str, tournament_name: str
     send_email(email, subject, text, html)
 
 
+def send_tournament_added_email(email: str, tournament_name: str, tournament_date: str, tournament_month: str) -> None:
+    """Уведомление о добавлении турнира (дублирует Telegram)."""
+    subject = f"Новый турнир: {tournament_name} ({tournament_month})"
+    text = f"Добавлен турнир «{tournament_name}» ({tournament_date}) в {tournament_month}."
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#d1fae5;border-radius:50%;line-height:56px;font-size:28px;">🆕</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Новый турнир
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;text-align:center;">
+        Добавлен турнир «{tournament_name}» ({tournament_date}) в {tournament_month}.
+      </p>
+    """
+    html = _base_html("Новый турнир", content, accent_color="#059669")
+    send_email(email, subject, text, html)
+
+
+def send_tournament_changed_email(
+    email: str,
+    tournament_name: str,
+    tournament_date: str,
+    changes: list[str],
+) -> None:
+    """Уведомление об изменении турнира (дублирует Telegram)."""
+    subject = f"Турнир изменён: {tournament_name}"
+    changes_text = "\n".join(f"• {c}" for c in changes)
+    text = f"Турнир «{tournament_name}» ({tournament_date}) изменён.\n\nИзменения:\n{changes_text}"
+    content = f"""
+      <div style="text-align:center;margin-bottom:24px;">
+        <span style="display:inline-block;width:56px;height:56px;background:#fef3c7;border-radius:50%;line-height:56px;font-size:28px;">🔄</span>
+      </div>
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#0f172a;text-align:center;">
+        Турнир изменён
+      </h2>
+      <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;text-align:center;">
+        Турнир «{tournament_name}» ({tournament_date})
+      </p>
+      <div style="background:#fffbeb;border-radius:12px;padding:16px;margin:16px 0;border-left:4px solid #f59e0b;">
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#92400e;">{"<br>".join(changes)}</p>
+      </div>
+    """
+    html = _base_html("Турнир изменён", content, accent_color="#d97706")
+    send_email(email, subject, text, html)
+
+
 def send_tournament_deleted_email(email: str, tournament_name: str, tournament_month: str) -> None:
     """Уведомление об удалении турнира (дублирует Telegram)."""
     subject = f"Турнир удалён: {tournament_name} ({tournament_month})"
