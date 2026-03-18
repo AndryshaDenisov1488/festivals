@@ -32,8 +32,13 @@ export default function RegistrationsPage() {
   useEffect(() => {
     if (statusFromUrl && ['pending', 'approved', 'rejected'].includes(statusFromUrl)) {
       setStatusFilter(statusFromUrl)
+      if (statusFromUrl === 'rejected') setMonthFilter('all')
     }
   }, [statusFromUrl])
+
+  useEffect(() => {
+    if (statusFilter === 'rejected') setMonthFilter('all')
+  }, [statusFilter])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
