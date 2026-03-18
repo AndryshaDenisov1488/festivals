@@ -3,7 +3,7 @@
 
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name festsfs.ru www.festsfs.ru;
 
     # Web (Next.js)
     location / {

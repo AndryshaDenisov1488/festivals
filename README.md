@@ -79,7 +79,7 @@ JWT_SECRET=your-random-secret
 
 Перед `npm run build` задай `NEXT_PUBLIC_API_URL`:
 
-- **С nginx** (веб и API на одном домене): `NEXT_PUBLIC_API_URL=""` — запросы идут на `/api/...`
+- **С nginx** (веб и API на одном домене, напр. festsfs.ru): `NEXT_PUBLIC_API_URL=""` — запросы идут на `/api/...`
 - **Без nginx** (прямой доступ): `NEXT_PUBLIC_API_URL=http://IP_СЕРВЕРА:8100`
 
 ```bash
@@ -115,8 +115,10 @@ sudo systemctl status judges-bot judges-api judges-web
 
 Если нужен домен и HTTPS:
 
+1. **DNS** — добавь A-запись: `festsfs.ru` → IP сервера
+2. **SSL** — после nginx: `sudo apt install certbot python3-certbot-nginx && sudo certbot --nginx -d festsfs.ru`
+
 ```bash
-# Скопировать deploy/nginx.conf.example, настроить server_name
 sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/judges
 sudo ln -s /etc/nginx/sites-available/judges /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
