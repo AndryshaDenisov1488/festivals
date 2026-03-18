@@ -254,7 +254,9 @@ export default function AdminPage() {
     try {
       await api(`/api/v1/admin/registrations/${r.registration_id}/approve`, { method: 'POST', token })
       setResultToast({ type: 'approved', userName: r.user_name, tournamentName: r.tournament_name })
-      loadRegistrations()
+      setRegistrations((prev) =>
+        prev.map((x) => (x.registration_id === r.registration_id ? { ...x, status: 'approved' as const } : x))
+      )
       setTimeout(() => setResultToast(null), 2500)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
@@ -266,7 +268,9 @@ export default function AdminPage() {
     try {
       await api(`/api/v1/admin/registrations/${r.registration_id}/reject`, { method: 'POST', token })
       setResultToast({ type: 'rejected', userName: r.user_name, tournamentName: r.tournament_name })
-      loadRegistrations()
+      setRegistrations((prev) =>
+        prev.map((x) => (x.registration_id === r.registration_id ? { ...x, status: 'rejected' as const } : x))
+      )
       setTimeout(() => setResultToast(null), 2500)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
@@ -829,7 +833,13 @@ export default function AdminPage() {
                       {regs.map((r) => (
                         <div
                           key={r.registration_id}
-                          className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                          className={`flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between ${
+                            r.status === 'approved'
+                              ? 'bg-green-50'
+                              : r.status === 'rejected'
+                                ? 'bg-red-50'
+                                : ''
+                          }`}
                         >
                           <div className="pl-8">
                             <p className="font-medium text-slate-800">{r.user_name}</p>
