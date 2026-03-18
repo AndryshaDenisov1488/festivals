@@ -396,7 +396,6 @@ async def admin_create_tournament(
                         await asyncio.sleep(0.05)
                     except Exception:
                         pass
-                await bot.session.close()
             except Exception as e:
                 logger.exception("Notify new tournament: %s", e)
         return {

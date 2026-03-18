@@ -86,9 +86,16 @@ export default function AdminPage() {
   const [tournamentsSearch, setTournamentsSearch] = useState('')
   const [tournamentsLoading, setTournamentsLoading] = useState(false)
   const [showCreateTournament, setShowCreateTournament] = useState(false)
+  const [createTournamentLoading, setCreateTournamentLoading] = useState(false)
+  const [successToast, setSuccessToast] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'registrations' | 'tournaments' | 'users' | 'budgets' | 'broadcast' | 'export'>('registrations')
   const [editingTournament, setEditingTournament] = useState<AdminTournament | null>(null)
   const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: '' })
+
+  const showSuccess = (msg: string) => {
+    setSuccessToast(msg)
+    setTimeout(() => setSuccessToast(null), 3000)
+  }
 
   const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 
@@ -253,6 +260,7 @@ export default function AdminPage() {
       a.download = `export_${exportMonth}.xlsx`
       a.click()
       URL.revokeObjectURL(a.href)
+      showSuccess('Экспорт за месяц скачан')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -276,6 +284,7 @@ export default function AdminPage() {
       })
       setEditingUser(null)
       loadUsers()
+      showSuccess('Пользователь обновлён')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
@@ -283,18 +292,23 @@ export default function AdminPage() {
 
   const handleCreateTournament = async () => {
     if (!token || !tournamentForm.name || !tournamentForm.date) return
+    setCreateTournamentLoading(true)
     try {
       await api('/api/v1/admin/tournaments', {
         method: 'POST',
         body: JSON.stringify(tournamentForm),
         token
       })
+      const name = tournamentForm.name
       setShowCreateTournament(false)
       setTournamentForm({ name: '', date: '', month: getDefaultMonth() })
       loadTournaments()
       loadBudgets()
+      showSuccess(`Турнир «${name}» добавлен`)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
+    } finally {
+      setCreateTournamentLoading(false)
     }
   }
 
@@ -309,6 +323,7 @@ export default function AdminPage() {
       setEditingTournament(null)
       loadTournaments()
       loadBudgets()
+      showSuccess('Турнир обновлён')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
@@ -321,6 +336,7 @@ export default function AdminPage() {
       await api(`/api/v1/admin/tournaments/${t.tournament_id}`, { method: 'DELETE', token })
       loadTournaments()
       loadBudgets()
+      showSuccess('Турнир удалён')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     }
@@ -341,6 +357,7 @@ export default function AdminPage() {
       a.download = `export_${exportYear}.xlsx`
       a.click()
       URL.revokeObjectURL(a.href)
+      showSuccess('Экспорт за год скачан')
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     } finally {
@@ -350,6 +367,21 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8">
+      {successToast && (
+        <div
+          className="fixed left-1/2 top-4 z-50 -translate-x-1/2 animate-toast-in rounded-xl bg-emerald-500 px-6 py-4 text-white shadow-lg ring-1 ring-black/5"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+              <Check className="h-6 w-6" strokeWidth={2.5} />
+            </div>
+            <p className="font-medium">{successToast}</p>
+          </div>
+        </div>
+      )}
+
       {resultToast && (
         <div
           className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 animate-toast-in rounded-xl px-6 py-4 shadow-lg ring-1 ring-black/5 ${
@@ -888,8 +920,14 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              <button onClick={handleCreateTournament} className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">Создать</button>
-              <button onClick={() => setShowCreateTournament(false)} className="rounded-lg border px-4 py-2">Отмена</button>
+              <button
+                onClick={handleCreateTournament}
+                disabled={createTournamentLoading}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {createTournamentLoading ? 'Создание...' : 'Создать'}
+              </button>
+              <button onClick={() => setShowCreateTournament(false)} disabled={createTournamentLoading} className="rounded-lg border px-4 py-2 disabled:opacity-60">Отмена</button>
             </div>
           </div>
         </div>
