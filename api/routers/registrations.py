@@ -71,15 +71,15 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         return
     try:
         from aiogram import Bot
-        async with Bot(token=BOT_TOKEN) as bot:
-            await bot.send_message(
-                CHANNEL_ID,
-                "🔔 <b>Новая заявка</b>\n"
-                f"👤 <b>{user_name}</b>\n"
-                f"Турнир: <b>{tournament_str}</b>\n"
-                "Статус: На рассмотрении",
-                parse_mode="HTML"
-            )
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            CHANNEL_ID,
+            "🔔 <b>Новая заявка</b>\n"
+            f"👤 <b>{user_name}</b>\n"
+            f"Турнир: <b>{tournament_str}</b>\n"
+            "Статус: На рассмотрении",
+            parse_mode="HTML"
+        )
         logger.info("Уведомление в канал отправлено: %s, %s", user_name, tournament_str)
     except Exception as e:
         logger.exception("Ошибка отправки в Telegram-канал: %s", e)
@@ -93,14 +93,14 @@ async def _notify_channel_cancel_registration(user_name: str, tournament_str: st
         return
     try:
         from aiogram import Bot
-        async with Bot(token=BOT_TOKEN) as bot:
-            await bot.send_message(
-                CHANNEL_ID,
-                "❌ <b>Заявка отменена</b>\n"
-                f"👤 <b>{user_name}</b>\n"
-                f"Турнир: <b>{tournament_str}</b>",
-                parse_mode="HTML"
-            )
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            CHANNEL_ID,
+            "❌ <b>Заявка отменена</b>\n"
+            f"👤 <b>{user_name}</b>\n"
+            f"Турнир: <b>{tournament_str}</b>",
+            parse_mode="HTML"
+        )
         logger.info("Уведомление об отмене в канал отправлено: %s, %s", user_name, tournament_str)
     except Exception as e:
         logger.exception("Ошибка отправки в Telegram-канал: %s", e)

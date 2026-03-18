@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
-import { PlusCircle, Check } from 'lucide-react'
+import { PlusCircle, Check, XCircle } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
 type Tournament = {
@@ -14,14 +14,16 @@ type Tournament = {
 
 type MyRegistration = {
   tournament_id: number
+  registration_id: number
   status: string
 }
 
 export default function TournamentsPage() {
   const [items, setItems] = useState<Tournament[]>([])
-  const [myRegs, setMyRegs] = useState<Record<number, string>>({})
+  const [myRegs, setMyRegs] = useState<Record<number, { status: string; registration_id: number }>>({})
   const [loading, setLoading] = useState(true)
   const [registering, setRegistering] = useState<number | null>(null)
+  const [cancelling, setCancelling] = useState<number | null>(null)
   const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('future')
   const [search, setSearch] = useState('')
 
@@ -41,8 +43,8 @@ export default function TournamentsPage() {
       ])
         .then(([tours, regs]) => {
           setItems(tours)
-          const map: Record<number, string> = {}
-          regs.forEach((r) => { map[r.tournament_id] = r.status })
+          const map: Record<number, { status: string; registration_id: number }> = {}
+          regs.forEach((r) => { map[r.tournament_id] = { status: r.status, registration_id: r.registration_id } })
           setMyRegs(map)
         })
         .catch(() => setItems([]))
@@ -58,16 +60,35 @@ export default function TournamentsPage() {
     if (!token) return
     setRegistering(tournamentId)
     try {
-      await api(`/api/v1/registrations`, {
+      const res = await api<{ registration_id: number }>(`/api/v1/registrations`, {
         method: 'POST',
         body: JSON.stringify({ tournament_id: tournamentId }),
         token
       })
-      setMyRegs((prev) => ({ ...prev, [tournamentId]: 'pending' }))
+      setMyRegs((prev) => ({ ...prev, [tournamentId]: { status: 'pending', registration_id: res.registration_id } }))
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка подачи заявки')
     } finally {
       setRegistering(null)
+    }
+  }
+
+  const handleCancel = async (tournamentId: number, registrationId: number) => {
+    if (!confirm('Отменить заявку?')) return
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setCancelling(tournamentId)
+    try {
+      await api(`/api/v1/registrations/${registrationId}`, { method: 'DELETE', token })
+      setMyRegs((prev) => {
+        const next = { ...prev }
+        delete next[tournamentId]
+        return next
+      })
+    } catch {
+      alert('Ошибка отмены')
+    } finally {
+      setCancelling(null)
     }
   }
 
@@ -99,10 +120,12 @@ export default function TournamentsPage() {
       {/* Mobile: cards */}
       <div className="space-y-3 md:hidden">
         {items.map((t) => {
-          const status = myRegs[t.tournament_id]
-          const canRegister = !status
+          const reg = myRegs[t.tournament_id]
+          const status = reg?.status
+          const canRegister = !reg
           const isPending = status === 'pending'
           const isApproved = status === 'approved'
+          const canCancel = (isPending || isApproved) && reg
           return (
             <div
               key={t.tournament_id}
@@ -112,7 +135,7 @@ export default function TournamentsPage() {
               <p className="text-sm text-slate-500">
                 {t.date} · {t.month}
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 {canRegister && (
                   <button
                     onClick={() => handleRegister(t.tournament_id)}
@@ -139,6 +162,17 @@ export default function TournamentsPage() {
                     Отклонена
                   </span>
                 )}
+                {canCancel && (
+                  <button
+                    onClick={() => handleCancel(t.tournament_id, reg.registration_id)}
+                    disabled={cancelling !== null}
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    aria-label="Отменить заявку"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    {cancelling === t.tournament_id ? 'Отмена...' : 'Отменить'}
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -161,42 +195,57 @@ export default function TournamentsPage() {
           </thead>
           <tbody>
             {items.map((t) => {
-              const status = myRegs[t.tournament_id]
-              const canRegister = !status
+              const reg = myRegs[t.tournament_id]
+              const status = reg?.status
+              const canRegister = !reg
               const isPending = status === 'pending'
               const isApproved = status === 'approved'
+              const canCancel = (isPending || isApproved) && reg
               return (
                 <tr key={t.tournament_id} className="border-b border-slate-100 last:border-0">
                   <td className="px-4 py-3 text-slate-800">{t.name}</td>
                   <td className="px-4 py-3 text-slate-600">{t.date}</td>
                   <td className="px-4 py-3 text-slate-600">{t.month}</td>
                   <td className="px-4 py-3 text-right">
-                    {canRegister && (
-                      <button
-                        onClick={() => handleRegister(t.tournament_id)}
-                        disabled={registering !== null}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                        {registering === t.tournament_id ? 'Отправка...' : 'Подать заявку'}
-                      </button>
-                    )}
-                    {isPending && (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                        На рассмотрении
-                      </span>
-                    )}
-                    {isApproved && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                        <Check className="h-3 w-3" />
-                        Одобрена
-                      </span>
-                    )}
-                    {status === 'rejected' && (
-                      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        Отклонена
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {canRegister && (
+                        <button
+                          onClick={() => handleRegister(t.tournament_id)}
+                          disabled={registering !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                          {registering === t.tournament_id ? 'Отправка...' : 'Подать заявку'}
+                        </button>
+                      )}
+                      {isPending && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                          На рассмотрении
+                        </span>
+                      )}
+                      {isApproved && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                          <Check className="h-3 w-3" />
+                          Одобрена
+                        </span>
+                      )}
+                      {status === 'rejected' && (
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                          Отклонена
+                        </span>
+                      )}
+                      {canCancel && (
+                        <button
+                          onClick={() => handleCancel(t.tournament_id, reg.registration_id)}
+                          disabled={cancelling !== null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                          aria-label="Отменить заявку"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          {cancelling === t.tournament_id ? 'Отмена...' : 'Отменить'}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )
