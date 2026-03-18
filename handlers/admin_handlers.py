@@ -407,14 +407,15 @@ async def view_referees(callback_query: types.CallbackQuery):
 async def view_tournaments(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).distinct().all()
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ Нет созданных турниров.")
             return
 
         kb = InlineKeyboardMarkup(row_width=3)
-        for m in months:
-            kb.insert(InlineKeyboardButton(m[0], callback_data=f'view_tournaments_month_{m[0]}'))
+        for month in months:
+            kb.insert(InlineKeyboardButton(month, callback_data=f'view_tournaments_month_{month}'))
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data='admin_menu'))
 
         await callback_query.message.answer("Выберите месяц, чтобы посмотреть турниры:", reply_markup=kb)
@@ -452,13 +453,14 @@ async def process_view_tournaments_month(callback_query: types.CallbackQuery):
 async def edit_tournament_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).distinct().all()
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для изменения.")
             return
         kb = InlineKeyboardMarkup(row_width=3)
-        for m in months:
-            kb.insert(InlineKeyboardButton(m[0], callback_data=f'edit_tournament_month_{m[0]}'))
+        for month in months:
+            kb.insert(InlineKeyboardButton(month, callback_data=f'edit_tournament_month_{month}'))
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data='admin_menu'))
         await callback_query.message.answer("📅 Выберите месяц турнира для изменения:", reply_markup=kb)
         await EditTournament.waiting_for_month.set()
@@ -563,14 +565,15 @@ async def process_edit_tournament_new_name(message: types.Message, state: FSMCon
 async def check_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).distinct().all()
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
             return
 
         kb = InlineKeyboardMarkup(row_width=3)
-        for m in months:
-            kb.insert(InlineKeyboardButton(m[0], callback_data=f'check_registrations_month_{m[0]}'))
+        for month in months:
+            kb.insert(InlineKeyboardButton(month, callback_data=f'check_registrations_month_{month}'))
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data='admin_menu'))
 
         await callback_query.message.answer("📅 Выберите месяц для проверки записей:", reply_markup=kb)
@@ -885,13 +888,14 @@ async def process_sendall_message(message: types.Message, state: FSMContext):
 async def admin_review_registrations(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).distinct().all()
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
             return
         kb = InlineKeyboardMarkup(row_width=3)
-        for m in months:
-            kb.insert(InlineKeyboardButton(m[0], callback_data=f'review_month_{m[0]}'))
+        for month in months:
+            kb.insert(InlineKeyboardButton(month, callback_data=f'review_month_{month}'))
         kb.add(InlineKeyboardButton("⬅️ Назад", callback_data='admin_menu'))
         await callback_query.message.answer("📅 Выберите месяц для рассмотрения заявок:", reply_markup=kb)
     except SQLAlchemyError:

@@ -331,13 +331,14 @@ async def process_sign_up(callback_query: types.CallbackQuery):
     """
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).distinct().all()
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для записи.")
             return
         keyboard = InlineKeyboardMarkup(row_width=3)
         for month in months:
-            keyboard.insert(InlineKeyboardButton(month[0], callback_data=f'month_{month[0]}'))
+            keyboard.insert(InlineKeyboardButton(month, callback_data=f'month_{month}'))
         keyboard.add(InlineKeyboardButton("⬅️ Назад", callback_data='back_to_main'))
         await callback_query.message.answer("📅 Выберите месяц:", reply_markup=keyboard)
     except SQLAlchemyError as e:
@@ -484,17 +485,18 @@ async def process_cancel_registration(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
-        months = session.query(Tournament.month).join(Registration).filter(
+        months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == user_id
         ).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
 
         if not months:
             await callback_query.message.answer("❌ У вас нет записей на турниры.")
             return
 
         keyboard = InlineKeyboardMarkup(row_width=3)
-        for m in months:
-            keyboard.insert(InlineKeyboardButton(m[0], callback_data=f'cancel_reg_month_{m[0]}'))
+        for month in months:
+            keyboard.insert(InlineKeyboardButton(month, callback_data=f'cancel_reg_month_{month}'))
         keyboard.add(InlineKeyboardButton("⬅️ Назад", callback_data='back_to_main'))
 
         await callback_query.message.answer("Выберите месяц, в котором хотите отменить запись:", reply_markup=keyboard)
@@ -641,15 +643,16 @@ async def process_cancel_action(callback_query: types.CallbackQuery, state: FSMC
 async def my_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months = session.query(Tournament.month).join(Registration).filter(
+        months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == callback_query.from_user.id
         ).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
         if not months:
             await callback_query.message.answer("❌ У вас нет записей на турниры.")
             return
         keyboard = InlineKeyboardMarkup(row_width=3)
         for month in months:
-            keyboard.insert(InlineKeyboardButton(month[0], callback_data=f'my_registrations_month_{month[0]}'))
+            keyboard.insert(InlineKeyboardButton(month, callback_data=f'my_registrations_month_{month}'))
         keyboard.add(InlineKeyboardButton("⬅️ Назад", callback_data='back_to_main'))
         await callback_query.message.answer("📅 Выберите месяц для просмотра ваших записей:", reply_markup=keyboard)
         await MyRegistrations.waiting_for_month.set()
