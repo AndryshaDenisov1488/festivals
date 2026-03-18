@@ -48,7 +48,10 @@ function SetPasswordModal({
       return
     }
     const token = localStorage.getItem('token')
-    if (!token) return
+    if (!token) {
+      setError('Сессия истекла. Войдите заново.')
+      return
+    }
     setLoading(true)
     try {
       await api('/api/v1/auth/set-password', {
@@ -58,7 +61,8 @@ function SetPasswordModal({
       })
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка сохранения')
+      const msg = err instanceof Error ? err.message : 'Ошибка сохранения'
+      setError(msg)
     } finally {
       setLoading(false)
     }
@@ -74,7 +78,7 @@ function SetPasswordModal({
         <p className="mb-4 text-sm text-slate-500">
           Для входа по email и паролю задайте пароль. Он будет использоваться при следующем входе.
         </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label htmlFor="set-password" className="mb-1 block text-sm font-medium text-slate-600">
               Пароль
@@ -84,8 +88,6 @@ function SetPasswordModal({
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/30"
               placeholder="Минимум 8 символов"
               disabled={loading}
@@ -101,19 +103,21 @@ function SetPasswordModal({
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              required
-              minLength={8}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/30"
               placeholder="Повторите пароль"
               disabled={loading}
               autoComplete="new-password"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-slate-800 py-2.5 font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-slate-800 py-2.5 font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Сохранение...' : 'Сохранить'}
           </button>

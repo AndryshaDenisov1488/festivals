@@ -78,32 +78,42 @@ def verify_registrations(session):
     """Проверка заявок."""
     print("\n📋 ЗАЯВКИ")
     print("=" * 50)
-    total = session.query(Registration).count()
-    valid_tournament_ids = {t[0] for t in session.query(Tournament.tournament_id).all()}
-    orphaned = sum(
-        1 for r in session.query(Registration).all()
-        if r.tournament_id not in valid_tournament_ids
-    )
-    print(f"Всего заявок: {total}")
-    if orphaned:
-        print(f"⚠️  Заявок без турнира (битые ссылки): {orphaned}")
-    return total
+    try:
+        total = session.query(Registration).count()
+        valid_tournament_ids = {t[0] for t in session.query(Tournament.tournament_id).all()}
+        orphaned = sum(
+            1 for r in session.query(Registration).all()
+            if r.tournament_id not in valid_tournament_ids
+        )
+        print(f"Всего заявок: {total}")
+        if orphaned:
+            print(f"⚠️  Заявок без турнира (битые ссылки): {orphaned}")
+    except Exception as e:
+        print(f"❌ Ошибка при проверке заявок: {e}")
+        print("   ⚠️  БД повреждена! Восстановите из бэкапа:")
+        print("   1. Остановите бота: sudo systemctl stop judges-bot judges-api")
+        print("   2. python restore_database.py /path/to/good/bot_database.db")
+        print("   3. sudo systemctl start judges-bot judges-api")
+    return 0
 
 
 def verify_payments(session):
     """Проверка записей об оплате."""
     print("\n💰 ОПЛАТЫ")
     print("=" * 50)
-    total = session.query(JudgePayment).count()
-    valid_tournament_ids = {t[0] for t in session.query(Tournament.tournament_id).all()}
-    orphaned = sum(
-        1 for p in session.query(JudgePayment).all()
-        if p.tournament_id not in valid_tournament_ids
-    )
-    print(f"Всего записей об оплате: {total}")
-    if orphaned:
-        print(f"⚠️  Оплат без турнира (битые ссылки): {orphaned}")
-    return total
+    try:
+        total = session.query(JudgePayment).count()
+        valid_tournament_ids = {t[0] for t in session.query(Tournament.tournament_id).all()}
+        orphaned = sum(
+            1 for p in session.query(JudgePayment).all()
+            if p.tournament_id not in valid_tournament_ids
+        )
+        print(f"Всего записей об оплате: {total}")
+        if orphaned:
+            print(f"⚠️  Оплат без турнира (битые ссылки): {orphaned}")
+    except Exception as e:
+        print(f"❌ Ошибка при проверке оплат: {e}")
+    return 0
 
 
 def main():
