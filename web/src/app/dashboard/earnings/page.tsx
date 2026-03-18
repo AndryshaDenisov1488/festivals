@@ -47,8 +47,8 @@ export default function EarningsPage() {
       if (search.trim()) params.set('search', search.trim())
       setLoading(true)
       Promise.all([
-        api<Payment[]>(`/api/v1/earnings/my/payments?${params}`, { token }),
-        api<SummaryResponse>('/api/v1/earnings/my/summary', { token })
+        api<Payment[]>(`/api/v1/earnings/my/payments?${params}`, { token: token ?? undefined }),
+        api<SummaryResponse>('/api/v1/earnings/my/summary', { token: token ?? undefined })
       ])
         .then(([p, s]) => {
           setPayments(p ?? [])
@@ -75,7 +75,7 @@ export default function EarningsPage() {
       await api(`/api/v1/earnings/my/confirm`, {
         method: 'POST',
         body: JSON.stringify({ payment_id: payment.payment_id, amount }),
-        token
+        token: token ?? undefined
       })
       const paymentDate = new Date().toLocaleString('ru-RU', {
         timeZone: 'Europe/Moscow',
@@ -92,9 +92,9 @@ export default function EarningsPage() {
             : p
         )
       )
-      const token = localStorage.getItem('token')
-      if (token) {
-        api<SummaryResponse>('/api/v1/earnings/my/summary', { token }).then(setSummary).catch(() => {})
+      const refreshToken = localStorage.getItem('token')
+      if (refreshToken) {
+        api<SummaryResponse>('/api/v1/earnings/my/summary', { token: refreshToken ?? undefined }).then(setSummary).catch(() => {})
       }
       setModalPayment(null)
       setConfirmAmount('')
@@ -118,7 +118,7 @@ export default function EarningsPage() {
       await api(`/api/v1/earnings/my/correct`, {
         method: 'POST',
         body: JSON.stringify({ payment_id: payment.payment_id, amount }),
-        token
+        token: token ?? undefined
       })
       setPayments((prev) =>
         prev.map((p) =>
