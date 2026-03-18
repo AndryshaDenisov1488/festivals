@@ -351,6 +351,17 @@ def admin_list_tournaments(
         db.close()
 
 
+MONTH_NAMES_RU = [
+    "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+]
+
+
+def _month_from_date(d: date) -> str:
+    """Месяц из даты (1–12 -> русское название)."""
+    return MONTH_NAMES_RU[d.month - 1]
+
+
 @router.post("/tournaments", status_code=201)
 async def admin_create_tournament(
     payload: TournamentCreateIn,
@@ -361,9 +372,10 @@ async def admin_create_tournament(
         d = datetime.strptime(payload.date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Неверный формат даты (YYYY-MM-DD)")
+    month = _month_from_date(d)
     db = SessionLocal()
     try:
-        t = Tournament(name=payload.name.strip(), date=d, month=payload.month.strip())
+        t = Tournament(name=payload.name.strip(), date=d, month=month)
         db.add(t)
         db.commit()
         db.refresh(t)
@@ -410,14 +422,15 @@ def admin_update_tournament(
             raise HTTPException(status_code=404, detail="Tournament not found")
         if payload.name is not None:
             t.name = payload.name.strip()
-        if payload.month is not None:
-            t.month = payload.month.strip()
         if payload.date is not None:
             from datetime import datetime
             try:
                 t.date = datetime.strptime(payload.date, "%Y-%m-%d").date()
+                t.month = _month_from_date(t.date)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Неверный формат даты (YYYY-MM-DD)")
+        elif payload.month is not None:
+            t.month = payload.month.strip()
         db.commit()
         return
     finally:

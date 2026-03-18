@@ -88,7 +88,18 @@ export default function AdminPage() {
   const [showCreateTournament, setShowCreateTournament] = useState(false)
   const [activeTab, setActiveTab] = useState<'registrations' | 'tournaments' | 'users' | 'budgets' | 'broadcast' | 'export'>('registrations')
   const [editingTournament, setEditingTournament] = useState<AdminTournament | null>(null)
-  const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: 'Апрель' })
+  const [tournamentForm, setTournamentForm] = useState({ name: '', date: '', month: '' })
+
+  const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+  const getMonthFromDate = (dateStr: string) => {
+    if (!dateStr) return MONTH_NAMES[new Date().getMonth()]
+    const d = new Date(dateStr + 'T12:00:00')
+    if (isNaN(d.getTime())) return MONTH_NAMES[new Date().getMonth()]
+    return MONTH_NAMES[d.getMonth()]
+  }
+
+  const getDefaultMonth = () => MONTH_NAMES[new Date().getMonth()]
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
@@ -279,7 +290,7 @@ export default function AdminPage() {
         token
       })
       setShowCreateTournament(false)
-      setTournamentForm({ name: '', date: '', month: 'Апрель' })
+      setTournamentForm({ name: '', date: '', month: getDefaultMonth() })
       loadTournaments()
       loadBudgets()
     } catch (err) {
@@ -438,7 +449,10 @@ export default function AdminPage() {
           <div className="flex flex-wrap items-center gap-2">
             <MonthFilter value={tournamentsMonthFilter} onChange={setTournamentsMonthFilter} />
             <button
-              onClick={() => setShowCreateTournament(true)}
+              onClick={() => {
+                setTournamentForm({ name: '', date: '', month: getDefaultMonth() })
+                setShowCreateTournament(true)
+              }}
               className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
             >
               <PlusCircle className="h-4 w-4" />
@@ -855,13 +869,21 @@ export default function AdminPage() {
                 <input value={tournamentForm.name} onChange={(e) => setTournamentForm((f) => ({ ...f, name: e.target.value }))} placeholder="Арена Плей Север" className="w-full rounded-lg border px-3 py-2" />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">Дата (YYYY-MM-DD)</label>
-                <input type="date" value={tournamentForm.date} onChange={(e) => setTournamentForm((f) => ({ ...f, date: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                <label className="mb-1 block text-sm text-slate-600">Дата</label>
+                <input
+                  type="date"
+                  value={tournamentForm.date}
+                  onChange={(e) => {
+                    const dateVal = e.target.value
+                    setTournamentForm((f) => ({ ...f, date: dateVal, month: getMonthFromDate(dateVal) }))
+                  }}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">Месяц</label>
-                <select value={tournamentForm.month} onChange={(e) => setTournamentForm((f) => ({ ...f, month: e.target.value }))} className="w-full rounded-lg border px-3 py-2">
-                  {['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'].map((m) => <option key={m} value={m}>{m}</option>)}
+                <label className="mb-1 block text-sm text-slate-600">Месяц (автоматически из даты)</label>
+                <select value={tournamentForm.month || getDefaultMonth()} onChange={(e) => setTournamentForm((f) => ({ ...f, month: e.target.value }))} className="w-full rounded-lg border px-3 py-2">
+                  {MONTH_NAMES.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
             </div>
@@ -883,13 +905,21 @@ export default function AdminPage() {
                 <input value={tournamentForm.name} onChange={(e) => setTournamentForm((f) => ({ ...f, name: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">Дата (YYYY-MM-DD)</label>
-                <input type="date" value={tournamentForm.date} onChange={(e) => setTournamentForm((f) => ({ ...f, date: e.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                <label className="mb-1 block text-sm text-slate-600">Дата</label>
+                <input
+                  type="date"
+                  value={tournamentForm.date}
+                  onChange={(e) => {
+                    const dateVal = e.target.value
+                    setTournamentForm((f) => ({ ...f, date: dateVal, month: getMonthFromDate(dateVal) }))
+                  }}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
               </div>
               <div>
-                <label className="mb-1 block text-sm text-slate-600">Месяц</label>
+                <label className="mb-1 block text-sm text-slate-600">Месяц (автоматически из даты)</label>
                 <select value={tournamentForm.month} onChange={(e) => setTournamentForm((f) => ({ ...f, month: e.target.value }))} className="w-full rounded-lg border px-3 py-2">
-                  {['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'].map((m) => <option key={m} value={m}>{m}</option>)}
+                  {MONTH_NAMES.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
             </div>
