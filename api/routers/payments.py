@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User, JudgePayment, Tournament
 from api.dependencies import get_current_user
-from api.utils import format_date, format_datetime
+from api.utils import format_date, format_datetime, filter_by_search
 from services.payment_system import PaymentSystem
 
 
@@ -42,11 +42,9 @@ def earnings_payments_list(
         if future_only:
             from utils.date_utils import get_today
             q = q.filter(Tournament.date >= get_today())
-        if search and search.strip():
-            term = f"%{search.strip()}%"
-            from sqlalchemy import or_
-            q = q.filter(or_(Tournament.name.ilike(term), Tournament.month.ilike(term)))
         payments = q.order_by(Tournament.date.desc()).all()
+        if search and search.strip():
+            payments = [(p, t) for p, t in payments if filter_by_search([t], search, lambda x: x.name, lambda x: x.month)]
         return [
             {
                 "payment_id": p.payment_id,
@@ -137,7 +135,7 @@ async def confirm_payment(
         ps = PaymentSystem(bot=None)
         ok = await ps.handle_payment_confirmation(payload.payment_id, True, payload.amount)
         if not ok:
-            raise HTTPException(status_code=500, detail="Failed to confirm")
+            raise HTTPException(status_code=500, detail="Не удалось сохранить подтверждение. Попробуйте позже или обратитесь к администратору.")
         return {"ok": True}
     finally:
         db.close()

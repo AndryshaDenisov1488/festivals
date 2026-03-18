@@ -1,8 +1,18 @@
 """Утилиты для API: формат дат dd.mm.yyyy, зона Москвы"""
 from datetime import date, datetime
-from typing import Optional
+from typing import Callable, List, Optional, TypeVar
 
 import pytz
+
+T = TypeVar("T")
+
+
+def filter_by_search(items: List[T], term: str, *field_getters: Callable[[T], str]) -> List[T]:
+    """Фильтрует список: term (без учёта регистра) входит в любое из полей. Работает с кириллицей."""
+    t = term.strip().lower()
+    if not t:
+        return items
+    return [x for x in items if any(t in str(g(x) or "").lower() for g in field_getters)]
 
 MSK = pytz.timezone("Europe/Moscow")
 

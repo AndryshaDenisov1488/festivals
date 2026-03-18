@@ -429,27 +429,29 @@ class PaymentSystem:
                         f"Спасибо за работу! 🙏"
                     )
                 
-                await self.bot.send_message(
-                    chat_id=payment.user.user_id,
-                    text=message,
-                    parse_mode='HTML'
-                )
+                if self.bot:
+                    await self.bot.send_message(
+                        chat_id=payment.user.user_id,
+                        text=message,
+                        parse_mode='HTML'
+                    )
                 
                 # Обновляем бюджет турнира
                 from services.budget_service import get_budget_service
                 budget_service = get_budget_service(self.bot)
                 await budget_service.update_judges_payment(payment.tournament_id)
                 
-                # Логируем действие
-                if self.action_logger:
+                # Логируем действие (только если есть bot — action_logger может использовать его)
+                if self.action_logger and self.bot:
                     await self.action_logger.log_action(
                         ActionType.USER_CONFIRM_PAYMENT,
                         f"Судья {payment.user.first_name} {payment.user.last_name} подтвердил оплату за турнир {payment.tournament.name}"
                     )
                 
             else:
-                # Судья не получил оплату - уведомляем админа
-                await self._notify_admin_about_unpaid_judge(payment)
+                # Судья не получил оплату - уведомляем админа (только если есть bot)
+                if self.bot:
+                    await self._notify_admin_about_unpaid_judge(payment)
                 
                 # ВАЖНО: Устанавливаем reminder_date далеко в будущем, чтобы прекратить отправку напоминаний
                 # Судья уже ответил, админ уведомлен - больше не нужно "дергать" судью

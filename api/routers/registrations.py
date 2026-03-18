@@ -10,7 +10,7 @@ from models import Registration, Tournament, User
 from models import RegistrationStatus
 from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
 from api.dependencies import get_current_user, get_db
-from api.utils import format_date
+from api.utils import format_date, filter_by_search
 
 
 router = APIRouter()
@@ -41,17 +41,10 @@ def my_registrations(
         q = q.filter(Tournament.date >= get_today())
     if status:
         q = q.filter(Registration.status == status)
-    if search and search.strip():
-        term = f"%{search.strip()}%"
-        from sqlalchemy import or_
-        q = q.filter(
-            or_(
-                Tournament.name.ilike(term),
-                Tournament.month.ilike(term),
-            )
-        )
     q = q.order_by(Tournament.date)
     regs = q.all()
+    if search and search.strip():
+        regs = [r for r in regs if filter_by_search([r.tournament], search, lambda t: t.name, lambda t: t.month)]
     return [
         {
             "registration_id": r.registration_id,

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Tournament
 from api.dependencies import get_db, get_current_user
-from api.utils import format_date
+from api.utils import format_date, filter_by_search
 from models import User
 from utils.date_utils import get_today
 
@@ -34,12 +34,10 @@ def list_tournaments(
         q = q.filter(Tournament.date >= from_date)
     if to_date:
         q = q.filter(Tournament.date <= to_date)
-    if search and search.strip():
-        from sqlalchemy import or_
-        term = f"%{search.strip()}%"
-        q = q.filter(or_(Tournament.name.ilike(term), Tournament.month.ilike(term)))
     q = q.order_by(Tournament.date)
     tournaments = q.all()
+    if search and search.strip():
+        tournaments = filter_by_search(tournaments, search, lambda t: t.name, lambda t: t.month)
     return [
         {
             "tournament_id": t.tournament_id,

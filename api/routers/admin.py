@@ -9,7 +9,7 @@ from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
 from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
 from api.dependencies import get_current_admin
-from api.utils import format_date
+from api.utils import format_date, filter_by_search
 from utils.date_utils import get_today
 
 
@@ -87,21 +87,22 @@ def admin_list_registrations(
             q = q.filter(Tournament.date >= get_today())
         if status:
             q = q.filter(Registration.status == status)
-        if search and search.strip():
-            from sqlalchemy import or_
-            term = f"%{search.strip()}%"
-            q = q.filter(
-                or_(
-                    User.first_name.ilike(term),
-                    User.last_name.ilike(term),
-                    User.function.ilike(term),
-                    User.category.ilike(term),
-                    Tournament.name.ilike(term),
-                    Tournament.month.ilike(term),
-                )
-            )
         q = q.order_by(Tournament.date.desc(), Registration.registration_id)
         regs = q.all()
+        if search and search.strip():
+            regs = [
+                r for r in regs
+                if filter_by_search(
+                    [r],
+                    search,
+                    lambda x: x.user.first_name,
+                    lambda x: x.user.last_name,
+                    lambda x: x.user.function,
+                    lambda x: x.user.category,
+                    lambda x: x.tournament.name,
+                    lambda x: x.tournament.month,
+                )
+            ]
         return [
             {
                 "registration_id": r.registration_id,
@@ -262,20 +263,17 @@ def admin_list_users(
 ):
     db = SessionLocal()
     try:
-        q = db.query(User).order_by(User.last_name, User.first_name)
+        users = db.query(User).order_by(User.last_name, User.first_name).all()
         if search and search.strip():
-            from sqlalchemy import or_
-            term = f"%{search.strip()}%"
-            q = q.filter(
-                or_(
-                    User.first_name.ilike(term),
-                    User.last_name.ilike(term),
-                    User.function.ilike(term),
-                    User.category.ilike(term),
-                    User.email.ilike(term),
-                )
+            users = filter_by_search(
+                users,
+                search,
+                lambda u: u.first_name,
+                lambda u: u.last_name,
+                lambda u: u.function,
+                lambda u: u.category,
+                lambda u: getattr(u, "email", None) or "",
             )
-        users = q.all()
         return [
             {
                 "user_id": u.user_id,
@@ -336,12 +334,10 @@ def admin_list_tournaments(
             q = q.filter(Tournament.month == month)
         if future_only:
             q = q.filter(Tournament.date >= get_today())
-        if search and search.strip():
-            from sqlalchemy import or_
-            term = f"%{search.strip()}%"
-            q = q.filter(or_(Tournament.name.ilike(term), Tournament.month.ilike(term)))
         q = q.order_by(Tournament.date)
         tours = q.all()
+        if search and search.strip():
+            tours = filter_by_search(tours, search, lambda t: t.name, lambda t: t.month)
         return [
             {
                 "tournament_id": t.tournament_id,
