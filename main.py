@@ -259,18 +259,18 @@ dp.register_callback_query_handler(process_cancel_payment_input, Text(equals="ca
 # Кнопка «Вызвать главное меню» (ReplyButton)
 setup_main_menu_button_handlers(dp)
 
-# Пользовательские экраны
-dp.register_callback_query_handler(process_sign_up, Text(equals="sign_up"))
-dp.register_callback_query_handler(process_month, lambda c: c.data and c.data.startswith("month_"))
-dp.register_callback_query_handler(process_tournament, lambda c: c.data and c.data.startswith("tournament_"))
+# Пользовательские экраны (state="*" чтобы работало при любом FSM состоянии)
+dp.register_callback_query_handler(process_sign_up, Text(equals="sign_up"), state="*")
+dp.register_callback_query_handler(process_month, lambda c: c.data and c.data.startswith("month_"), state="*")
+dp.register_callback_query_handler(process_tournament, lambda c: c.data and c.data.startswith("tournament_"), state="*")
 
-dp.register_callback_query_handler(process_cancel_registration, Text(equals="cancel_registration"))
-dp.register_callback_query_handler(process_cancel_reg_month, lambda c: c.data and c.data.startswith("cancel_reg_month_"))
-dp.register_callback_query_handler(process_cancel_reg_id, lambda c: c.data and c.data.startswith("cancel_reg_id_"))
-dp.register_callback_query_handler(process_confirm_cancel, lambda c: c.data and c.data.startswith("confirm_cancel_"))
+dp.register_callback_query_handler(process_cancel_registration, Text(equals="cancel_registration"), state="*")
+dp.register_callback_query_handler(process_cancel_reg_month, lambda c: c.data and c.data.startswith("cancel_reg_month_"), state="*")
+dp.register_callback_query_handler(process_cancel_reg_id, lambda c: c.data and c.data.startswith("cancel_reg_id_"), state="*")
+dp.register_callback_query_handler(process_confirm_cancel, lambda c: c.data and c.data.startswith("confirm_cancel_"), state="*")
 dp.register_callback_query_handler(process_cancel_action, Text(equals="cancel_action"), state="*")
 
-dp.register_callback_query_handler(my_registrations_step, Text(equals="my_registrations"))
+dp.register_callback_query_handler(my_registrations_step, Text(equals="my_registrations"), state="*")
 dp.register_callback_query_handler(
     process_my_registrations_month,
     lambda c: c.data and c.data.startswith("my_registrations_month_"),
@@ -278,8 +278,8 @@ dp.register_callback_query_handler(
 )
 
 # Редактирование профиля
-dp.register_callback_query_handler(edit_profile_step, Text(equals="edit_profile"))
-dp.register_callback_query_handler(link_email_step, Text(equals="link_email"))
+dp.register_callback_query_handler(edit_profile_step, Text(equals="edit_profile"), state="*")
+dp.register_callback_query_handler(link_email_step, Text(equals="link_email"), state="*")
 dp.register_message_handler(process_link_email_input, state=LinkEmail.waiting_for_email)
 dp.register_message_handler(process_link_email_code, state=LinkEmail.waiting_for_code)
 dp.register_message_handler(process_edit_profile_first_name, state=EditProfile.waiting_for_first_name)
@@ -304,16 +304,16 @@ dp.register_message_handler(process_correct_earnings_amount, state=CorrectEarnin
 # Админка
 dp.register_message_handler(cmd_admin, commands=["admin"], state="*")
 
-# Админские команды - обрабатываются через admin_actions
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_add_tournament"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_view_referees"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_view_tournaments"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_edit_tournament"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_check_registrations"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_export_data"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_sendall"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_review_registrations"))
-dp.register_callback_query_handler(admin_actions, Text(equals="admin_delete_tournament"))
+# Админские команды - обрабатываются через admin_actions (state="*" чтобы работало при любом FSM состоянии)
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_add_tournament"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_view_referees"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_view_tournaments"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_edit_tournament"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_check_registrations"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_export_data"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_sendall"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_review_registrations"), state="*")
+dp.register_callback_query_handler(admin_actions, Text(equals="admin_delete_tournament"), state="*")
 
 # КНОПКА «Назад в админ-меню» (универсальная)
 from keyboards import admin_menu_keyboard
@@ -351,6 +351,7 @@ dp.register_message_handler(process_edit_tournament_new_name, state=EditTourname
 dp.register_callback_query_handler(
     process_view_tournaments_month,
     lambda c: c.data and c.data.startswith("view_tournaments_month_"),
+    state="*",
 )
 
 # Проверка записей
@@ -361,15 +362,15 @@ dp.register_callback_query_handler(
 )
 
 # Экспорт
-dp.register_callback_query_handler(process_export_period, lambda c: c.data and c.data.startswith("export_period_"))
-dp.register_callback_query_handler(process_export_month,  lambda c: c.data and c.data.startswith("export_month_"))
-dp.register_callback_query_handler(process_export_year,   lambda c: c.data and c.data.startswith("export_year_"))
+dp.register_callback_query_handler(process_export_period, lambda c: c.data and c.data.startswith("export_period_"), state="*")
+dp.register_callback_query_handler(process_export_month,  lambda c: c.data and c.data.startswith("export_month_"), state="*")
+dp.register_callback_query_handler(process_export_year,   lambda c: c.data and c.data.startswith("export_year_"), state="*")
 
 # Рассмотрение заявок
-dp.register_callback_query_handler(admin_review_tournaments_in_month, lambda c: c.data and c.data.startswith("review_month_"))
-dp.register_callback_query_handler(process_review_tournament,         lambda c: c.data and c.data.startswith("review_tournament_"))
-dp.register_callback_query_handler(process_approve_registration,      lambda c: c.data and c.data.startswith("approve_"))
-dp.register_callback_query_handler(process_reject_registration,       lambda c: c.data and c.data.startswith("reject_"))
+dp.register_callback_query_handler(admin_review_tournaments_in_month, lambda c: c.data and c.data.startswith("review_month_"), state="*")
+dp.register_callback_query_handler(process_review_tournament,         lambda c: c.data and c.data.startswith("review_tournament_"), state="*")
+dp.register_callback_query_handler(process_approve_registration,      lambda c: c.data and c.data.startswith("approve_"), state="*")
+dp.register_callback_query_handler(process_reject_registration,      lambda c: c.data and c.data.startswith("reject_"), state="*")
 
 # Удаление турнира - обрабатывается через admin_actions
 # dp.register_callback_query_handler(delete_tournament_step, lambda c: c.data == "admin_delete_tournament")
@@ -391,28 +392,28 @@ dp.register_callback_query_handler(
 dp.register_message_handler(process_sendall_message, state=SendAllMessages.waiting_for_message)
 
 # Заработок судей (админ)
-dp.register_callback_query_handler(admin_judge_earnings_menu, Text(equals="admin_judge_earnings"))
-dp.register_callback_query_handler(admin_earnings_monthly, Text(equals="admin_earnings_monthly"))
-dp.register_callback_query_handler(admin_earnings_yearly, Text(equals="admin_earnings_yearly"))
-dp.register_callback_query_handler(admin_earnings_seasonal, Text(equals="admin_earnings_seasonal"))
-dp.register_callback_query_handler(process_earnings_month, lambda c: c.data and c.data.startswith("earnings_month_"))
-dp.register_callback_query_handler(process_earnings_year, lambda c: c.data and c.data.startswith("earnings_year_"))
+dp.register_callback_query_handler(admin_judge_earnings_menu, Text(equals="admin_judge_earnings"), state="*")
+dp.register_callback_query_handler(admin_earnings_monthly, Text(equals="admin_earnings_monthly"), state="*")
+dp.register_callback_query_handler(admin_earnings_yearly, Text(equals="admin_earnings_yearly"), state="*")
+dp.register_callback_query_handler(admin_earnings_seasonal, Text(equals="admin_earnings_seasonal"), state="*")
+dp.register_callback_query_handler(process_earnings_month, lambda c: c.data and c.data.startswith("earnings_month_"), state="*")
+dp.register_callback_query_handler(process_earnings_year, lambda c: c.data and c.data.startswith("earnings_year_"), state="*")
 
 # Ручной ввод заработка (админ)
-dp.register_callback_query_handler(admin_manual_payment, Text(equals="admin_manual_payment"))
+dp.register_callback_query_handler(admin_manual_payment, Text(equals="admin_manual_payment"), state="*")
 dp.register_callback_query_handler(process_manual_payment_judge, lambda c: c.data and c.data.startswith("manual_payment_judge_"), state="*")
 dp.register_callback_query_handler(process_manual_payment_tournament, lambda c: c.data and c.data.startswith("manual_payment_tournament_"), state=ManualPaymentInput.waiting_for_tournament_selection)
 dp.register_message_handler(process_manual_payment_amount, state=ManualPaymentInput.waiting_for_amount)
 
 # Дашборд админа
-dp.register_callback_query_handler(show_admin_dashboard, Text(equals="admin_dashboard"))
-dp.register_callback_query_handler(show_detailed_stats, Text(equals="admin_detailed_stats"))
+dp.register_callback_query_handler(show_admin_dashboard, Text(equals="admin_dashboard"), state="*")
+dp.register_callback_query_handler(show_detailed_stats, Text(equals="admin_detailed_stats"), state="*")
 
 # Бюджетирование турниров
-dp.register_callback_query_handler(handle_budget_reminder, lambda c: c.data and (c.data.startswith("set_budget_") or c.data.startswith("remind_later_") or c.data.startswith("skip_budget_")))
+dp.register_callback_query_handler(handle_budget_reminder, lambda c: c.data and (c.data.startswith("set_budget_") or c.data.startswith("remind_later_") or c.data.startswith("skip_budget_")), state="*")
 dp.register_message_handler(process_budget_amount, state=BudgetInput.waiting_for_amount)
-dp.register_callback_query_handler(show_budget_info, Text(equals="admin_budget_info"))
-dp.register_callback_query_handler(show_admin_profit_dashboard, Text(equals="admin_profit_dashboard"))
+dp.register_callback_query_handler(show_budget_info, Text(equals="admin_budget_info"), state="*")
+dp.register_callback_query_handler(show_admin_profit_dashboard, Text(equals="admin_profit_dashboard"), state="*")
 
 # Обработчик для выхода из состояния PaymentAmount при нажатии других кнопок
 async def _handle_callback_in_payment_state(cb: types.CallbackQuery, state: FSMContext):

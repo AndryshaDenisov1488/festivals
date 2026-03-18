@@ -87,12 +87,15 @@ async def send_tournament_change_notification(bot, users, old_tournament, new_to
 
 
 # ========== /admin — Главное меню для админа ==========
-async def cmd_admin(message: types.Message):
+async def cmd_admin(message: types.Message, state: FSMContext):
     logger.info("[cmd_admin] called by user_id=%s", message.from_user.id)
     if message.from_user.id not in ADMIN_IDS:
         logger.warning("[cmd_admin] access denied for user_id=%s", message.from_user.id)
         await message.answer("❌ У вас нет доступа к административным функциям.")
         return
+
+    # Сбрасываем FSM состояние при входе в админку, чтобы кнопки работали
+    await state.finish()
 
     # Устанавливаем контекст пользователя как админ
     from utils.menu_manager import get_menu_manager
