@@ -85,6 +85,27 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         logger.exception("Ошибка отправки в Telegram-канал: %s", e)
 
 
+async def _notify_channel_cancel_registration(user_name: str, tournament_str: str) -> None:
+    """Отправляет уведомление об отмене заявки в Telegram-канал."""
+    from config import BOT_TOKEN
+    if not BOT_TOKEN or not CHANNEL_ID:
+        logger.warning("Telegram-канал: BOT_TOKEN или CHANNEL_ID не заданы, уведомление пропущено")
+        return
+    try:
+        from aiogram import Bot
+        async with Bot(token=BOT_TOKEN) as bot:
+            await bot.send_message(
+                CHANNEL_ID,
+                "❌ <b>Заявка отменена</b>\n"
+                f"👤 <b>{user_name}</b>\n"
+                f"Турнир: <b>{tournament_str}</b>",
+                parse_mode="HTML"
+            )
+        logger.info("Уведомление об отмене в канал отправлено: %s, %s", user_name, tournament_str)
+    except Exception as e:
+        logger.exception("Ошибка отправки в Telegram-канал: %s", e)
+
+
 def _notify_admin_email_new_registration(user_name: str, tournament_str: str) -> None:
     """Дублирует уведомление о новой заявке на email админа."""
     if not ADMIN_EMAIL:
@@ -142,7 +163,7 @@ async def create_registration(
 
 
 @router.delete("/{registration_id}", status_code=204)
-def cancel_registration(
+async def cancel_registration(
     registration_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -156,10 +177,15 @@ def cancel_registration(
     if not reg:
         raise HTTPException(status_code=404, detail="Registration not found")
 
+    user_name = f"{user.first_name} {user.last_name}"
+    tournament_str = f"{format_date(reg.tournament.date)} {reg.tournament.name}"
+
     db.query(JudgePayment).filter(
         JudgePayment.user_id == user.user_id,
         JudgePayment.tournament_id == reg.tournament_id,
     ).delete(synchronize_session=False)
     db.delete(reg)
     db.commit()
+
+    await _notify_channel_cancel_registration(user_name, tournament_str)
     return None

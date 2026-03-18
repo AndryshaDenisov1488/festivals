@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from .routers import auth, users, tournaments, registrations, payments, budgets, admin, exports
 from .email_service import SMTP_HOST, SMTP_FROM
+from config import BOT_TOKEN, CHANNEL_ID
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,14 @@ def create_app() -> FastAPI:
             )
         else:
             logger.info("[SMTP] Email настроен: host=%s port=%s from=%s", SMTP_HOST, os.getenv("SMTP_PORT", "587"), SMTP_FROM)
+
+        if not BOT_TOKEN or not CHANNEL_ID:
+            logger.warning(
+                "[Channel] Telegram-канал не настроен: BOT_TOKEN и CHANNEL_ID должны быть в .env. "
+                "Уведомления о заявках в канал не будут отправляться."
+            )
+        else:
+            logger.info("[Channel] Telegram-канал настроен: CHANNEL_ID=%s", CHANNEL_ID)
 
     return app
 
