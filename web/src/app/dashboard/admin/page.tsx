@@ -134,7 +134,7 @@ export default function AdminPage() {
     if (!token) return
     setRegsLoading(true)
     const params = new URLSearchParams()
-    if (regsFilter) params.set('status', regsFilter)
+    if (regsFilter && regsFilter !== 'pending') params.set('status', regsFilter)
     if (regsMonthFilter === 'future') params.set('future_only', 'true')
     else if (regsMonthFilter === 'all') params.set('future_only', 'false')
     else params.set('month', regsMonthFilter)
