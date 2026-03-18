@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { api } from '@/lib/api'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
 
@@ -18,11 +19,21 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function RegistrationsPage() {
+  const searchParams = useSearchParams()
+  const statusFromUrl = searchParams.get('status') as 'pending' | 'approved' | 'rejected' | null
   const [items, setItems] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('future')
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('')
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | ''>(
+    statusFromUrl && ['pending', 'approved', 'rejected'].includes(statusFromUrl) ? statusFromUrl : ''
+  )
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (statusFromUrl && ['pending', 'approved', 'rejected'].includes(statusFromUrl)) {
+      setStatusFilter(statusFromUrl)
+    }
+  }, [statusFromUrl])
 
   useEffect(() => {
     const token = localStorage.getItem('token')

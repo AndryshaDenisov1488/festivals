@@ -310,41 +310,56 @@ export default function DashboardPage() {
           </h2>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-4">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2">
+              <Link
+                href="/dashboard/registrations?status=approved"
+                className="block cursor-pointer rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 transition hover:border-emerald-300 hover:bg-emerald-100"
+                aria-label="Одобрено: показать заявки"
+              >
                 <span className="text-xs font-medium text-emerald-700">Одобрено</span>
                 <p className="font-mono text-xl font-bold text-slate-800">{regsStats.approved}</p>
                 <span className="text-xs text-slate-600">{regsApprovedPct}%</span>
-              </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
+              </Link>
+              <Link
+                href="/dashboard/registrations?status=pending"
+                className="block cursor-pointer rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 transition hover:border-amber-300 hover:bg-amber-100"
+                aria-label="На рассмотрении: показать заявки"
+              >
                 <span className="text-xs font-medium text-amber-700">На рассмотрении</span>
                 <p className="font-mono text-xl font-bold text-slate-800">{regsStats.pending}</p>
-              </div>
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2">
+              </Link>
+              <Link
+                href="/dashboard/registrations?status=rejected"
+                className="block cursor-pointer rounded-lg border border-red-200 bg-red-50 px-4 py-2 transition hover:border-red-300 hover:bg-red-100"
+                aria-label="Отклонено: показать заявки"
+              >
                 <span className="text-xs font-medium text-red-700">Отклонено</span>
                 <p className="font-mono text-xl font-bold text-slate-800">{regsStats.rejected}</p>
                 <span className="text-xs text-slate-600">{regsRejectedPct}%</span>
-              </div>
+              </Link>
             </div>
             <div className="min-w-[200px] max-w-[320px] flex-1">
               <p className="mb-2 text-xs font-medium text-slate-600">Распределение по статусам</p>
               <div className="flex h-8 overflow-hidden rounded-lg border border-slate-200">
                 {regsStats.approved > 0 && (
-                  <div
-                    className="bg-emerald-500"
+                  <Link
+                    href="/dashboard/registrations?status=approved"
+                    className="block h-full bg-emerald-500 transition hover:bg-emerald-600"
                     style={{ width: `${(regsStats.approved / regsTotal) * 100}%` }}
                     title={`Одобрено: ${regsStats.approved}`}
                   />
                 )}
                 {regsStats.pending > 0 && (
-                  <div
-                    className="bg-amber-400"
+                  <Link
+                    href="/dashboard/registrations?status=pending"
+                    className="block h-full bg-amber-400 transition hover:bg-amber-500"
                     style={{ width: `${(regsStats.pending / regsTotal) * 100}%` }}
                     title={`На рассмотрении: ${regsStats.pending}`}
                   />
                 )}
                 {regsStats.rejected > 0 && (
-                  <div
-                    className="bg-red-400"
+                  <Link
+                    href="/dashboard/registrations?status=rejected"
+                    className="block h-full bg-red-400 transition hover:bg-red-500"
                     style={{ width: `${(regsStats.rejected / regsTotal) * 100}%` }}
                     title={`Отклонено: ${regsStats.rejected}`}
                   />
