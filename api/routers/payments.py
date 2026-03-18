@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User, JudgePayment, Tournament
 from api.dependencies import get_current_user
+from api.utils import format_date, format_datetime
 from services.payment_system import PaymentSystem
 
 
@@ -34,10 +35,10 @@ def earnings_payments_list(
                 "payment_id": p.payment_id,
                 "tournament_id": p.tournament_id,
                 "tournament_name": t.name,
-                "tournament_date": t.date.isoformat(),
+                "tournament_date": format_date(t.date),
                 "amount": p.amount,
                 "is_paid": p.is_paid,
-                "payment_date": p.payment_date.isoformat() if p.payment_date else None,
+                "payment_date": format_datetime(p.payment_date),
             }
             for p, t in payments
         ]
@@ -57,9 +58,9 @@ def earnings_detail(
         "tournament_earnings": [
             {
                 "name": t[0],
-                "date": t[1].isoformat() if t[1] else None,
+                "date": format_date(t[1]) if t[1] else None,
                 "amount": t[2],
-                "payment_date": t[3].isoformat() if t[3] else None,
+                "payment_date": format_datetime(t[3]) if t[3] else None,
             }
             for t in data["tournament_earnings"]
         ],

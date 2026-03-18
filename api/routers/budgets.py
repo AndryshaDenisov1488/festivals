@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User
 from api.dependencies import get_current_admin
+from api.utils import format_date, format_datetime
 from services.budget_service import BudgetService
 
 
@@ -17,7 +18,14 @@ async def list_budgets(
 ):
     bs = BudgetService(bot=None)
     data = await bs.get_all_budgets()
-    return data
+    return [
+        {
+            **item,
+            "tournament_date": format_date(item.get("tournament_date")),
+            "budget_set_date": format_datetime(item.get("budget_set_date")),
+        }
+        for item in data
+    ]
 
 
 @router.get("/summary")

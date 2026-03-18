@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Tournament
 from api.dependencies import get_db, get_current_user
+from api.utils import format_date
 from models import User
 
 
@@ -34,7 +35,7 @@ def list_tournaments(
         {
             "tournament_id": t.tournament_id,
             "month": t.month,
-            "date": t.date.isoformat(),
+            "date": format_date(t.date),
             "name": t.name,
         }
         for t in tournaments
@@ -54,6 +55,6 @@ def get_tournament(
     return {
         "tournament_id": t.tournament_id,
         "month": t.month,
-        "date": t.date.isoformat(),
+        "date": format_date(t.date),
         "name": t.name,
     }

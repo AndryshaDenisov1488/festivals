@@ -28,7 +28,7 @@ def request_code(payload: AuthRequestCodeIn):
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User with this email not found or not verified",
+                detail="Email не найден или не привязан. Привяжите email в боте: /link_email",
             )
 
         now = datetime.now(timezone.utc)
@@ -54,6 +54,8 @@ def verify_code(payload: AuthVerifyCodeIn):
         code = user.email_verification_code
         expires_at = user.email_verification_expires_at
         now = datetime.now(timezone.utc)
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
 
         if not code or code != payload.code:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid code")

@@ -56,10 +56,18 @@ export default function EarningsPage() {
         body: JSON.stringify({ payment_id: payment.payment_id, amount }),
         token
       })
+      const paymentDate = new Date().toLocaleString('ru-RU', {
+        timeZone: 'Europe/Moscow',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
       setPayments((prev) =>
         prev.map((p) =>
           p.payment_id === payment.payment_id
-            ? { ...p, is_paid: true, amount, payment_date: new Date().toISOString().slice(0, 10) }
+            ? { ...p, is_paid: true, amount, payment_date: paymentDate }
             : p
         )
       )
@@ -160,7 +168,7 @@ export default function EarningsPage() {
                 <p className="font-medium text-slate-800">{p.tournament_name}</p>
                 <p className="text-sm text-slate-500">
                   {p.tournament_date}
-                  {p.payment_date ? ` · Оплачено: ${String(p.payment_date).slice(0, 10)}` : ''}
+                  {p.payment_date ? ` · Оплачено: ${p.payment_date}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-3">

@@ -6,6 +6,7 @@ from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus
 from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT
 from api.dependencies import get_current_admin
+from api.utils import format_date
 
 
 router = APIRouter()
@@ -61,7 +62,7 @@ def admin_list_registrations(
                 "registration_id": r.registration_id,
                 "tournament_id": r.tournament_id,
                 "tournament_name": r.tournament.name,
-                "tournament_date": r.tournament.date.isoformat(),
+                "tournament_date": format_date(r.tournament.date),
                 "tournament_month": r.tournament.month,
                 "user_id": r.user_id,
                 "user_name": f"{r.user.first_name} {r.user.last_name}",

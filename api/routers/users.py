@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_current_user
+from config import ADMIN_IDS
 from models import User
 
 
@@ -16,5 +17,5 @@ def get_me(user: User = Depends(get_current_user)):
         "function": user.function,
         "category": user.category,
         "email": getattr(user, "email", None),
-        "is_admin": getattr(user, "is_admin", False),
+        "is_admin": user.user_id in ADMIN_IDS,
     }

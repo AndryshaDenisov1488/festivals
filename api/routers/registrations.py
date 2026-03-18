@@ -9,6 +9,7 @@ from models import Registration, Tournament, User
 from models import RegistrationStatus
 from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID
 from api.dependencies import get_current_user, get_db
+from api.utils import format_date
 
 
 router = APIRouter()
@@ -38,7 +39,7 @@ def my_registrations(
             "status": r.status,
             "tournament": {
                 "name": r.tournament.name,
-                "date": r.tournament.date.isoformat(),
+                "date": format_date(r.tournament.date),
                 "month": r.tournament.month,
             },
         }
