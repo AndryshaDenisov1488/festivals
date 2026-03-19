@@ -958,7 +958,7 @@ export default function AdminPage() {
                           className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                         >
                           <Mail className="h-4 w-4" />
-                          {earningsRequestLoading ? 'Отправка...' : 'Отправить запрос'}
+                          {earningsRequestLoading !== null && j.without_amount_list.some((x) => x.payment_id === earningsRequestLoading) ? 'Отправка...' : 'Отправить запрос'}
                         </button>
                       )}
                     </div>
