@@ -21,8 +21,11 @@ function copyRecursive(src, dest) {
 }
 
 try {
+  const standalonePublic = path.join(standalone, 'public')
   if (fs.existsSync(publicDir)) {
-    copyRecursive(publicDir, path.join(standalone, 'public'))
+    copyRecursive(publicDir, standalonePublic)
+  } else {
+    fs.mkdirSync(standalonePublic, { recursive: true })
   }
   if (fs.existsSync(staticDir)) {
     fs.mkdirSync(path.dirname(standaloneStatic), { recursive: true })
