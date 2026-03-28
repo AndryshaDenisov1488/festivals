@@ -1153,15 +1153,15 @@ export default function AdminPage() {
                       {regs.map((r) => (
                         <div
                           key={r.registration_id}
-                          className={`flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between ${
+                          className={`group flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-start sm:gap-6 xl:gap-8 ${
                             r.status === 'approved'
-                              ? 'bg-green-50'
+                              ? 'bg-green-50 sm:hover:bg-green-100/80'
                               : r.status === 'rejected'
-                                ? 'bg-red-50'
-                                : ''
-                          }`}
+                                ? 'bg-red-50 sm:hover:bg-red-100/80'
+                                : 'sm:hover:bg-slate-50 sm:hover:shadow-[inset_0_0_0_1px_rgb(203_213_225)]'
+                          } transition-colors`}
                         >
-                          <div className="pl-8">
+                          <div className="min-w-0 shrink-0 pl-8 sm:max-w-[min(40%,28rem)]">
                             <p className="font-medium text-slate-800">{r.user_name}</p>
                             <span className={`inline-block rounded px-2 py-0.5 text-xs ${
                               r.status === 'approved' ? 'bg-green-100 text-green-800' :
@@ -1172,8 +1172,9 @@ export default function AdminPage() {
                             </span>
                           </div>
                           {r.status === 'pending' && (
-                            <div className="flex flex-col gap-2 pl-8 sm:flex-row">
+                            <div className="flex shrink-0 flex-col gap-2 pl-8 sm:flex-row sm:pl-0 sm:rounded-lg sm:p-0.5 sm:transition-shadow sm:group-hover:shadow-[0_0_0_2px_rgb(148_163_184)]">
                               <button
+                                type="button"
                                 onClick={() => handleApprove(r)}
                                 className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm text-white hover:bg-green-700"
                               >
@@ -1181,6 +1182,7 @@ export default function AdminPage() {
                                 Одобрить
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleReject(r)}
                                 className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-lg border border-red-300 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                               >
