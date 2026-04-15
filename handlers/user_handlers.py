@@ -483,13 +483,26 @@ async def process_tournament(callback_query: types.CallbackQuery):
 
 # ======== Кто ещё едет на фест (утверждённые судьи) ========
 async def process_festmates_start(callback_query: types.CallbackQuery):
-    """Выбор месяца для просмотра списка утверждённых судей."""
+    """Выбор месяца для просмотра списка утверждённых судей (только турниры, где пользователь утверждён)."""
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        user_id = callback_query.from_user.id
+        months_raw = (
+            session.query(Tournament.month)
+            .join(Registration, Registration.tournament_id == Tournament.tournament_id)
+            .filter(
+                Registration.user_id == user_id,
+                Registration.status == RegistrationStatus.APPROVED,
+            )
+            .distinct()
+            .all()
+        )
         months = [m[0] for m in months_raw if m[0]]
         if not months:
-            await callback_query.message.answer("❌ В базе нет турниров.")
+            await callback_query.message.answer(
+                "ℹ️ Нет турниров, на которые вы утверждены. "
+                "Здесь отображаются только фесты, куда вы едете как утверждённый судья."
+            )
             return
         keyboard = InlineKeyboardMarkup(row_width=3)
         for month in months:
@@ -519,14 +532,22 @@ async def process_festmates_month(callback_query: types.CallbackQuery):
     selected_month = callback_query.data[len(prefix) :]
     session = SessionLocal()
     try:
+        user_id = callback_query.from_user.id
         tournaments = (
             session.query(Tournament)
-            .filter(Tournament.month == selected_month)
+            .join(Registration, Registration.tournament_id == Tournament.tournament_id)
+            .filter(
+                Tournament.month == selected_month,
+                Registration.user_id == user_id,
+                Registration.status == RegistrationStatus.APPROVED,
+            )
             .order_by(Tournament.date)
             .all()
         )
         if not tournaments:
-            await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
+            await callback_query.message.answer(
+                f"❌ Нет утверждённых вами турниров в {selected_month}."
+            )
             return
         keyboard = InlineKeyboardMarkup(row_width=1)
         for tournament in tournaments:
@@ -563,6 +584,7 @@ async def process_festmates_tournament(callback_query: types.CallbackQuery):
         return
     session = SessionLocal()
     try:
+        user_id = callback_query.from_user.id
         tournament = (
             session.query(Tournament)
             .filter(Tournament.tournament_id == tournament_id)
@@ -570,6 +592,20 @@ async def process_festmates_tournament(callback_query: types.CallbackQuery):
         )
         if not tournament:
             await callback_query.message.answer("❌ Турнир не найден.")
+            return
+        my_ok = (
+            session.query(Registration)
+            .filter(
+                Registration.tournament_id == tournament_id,
+                Registration.user_id == user_id,
+                Registration.status == RegistrationStatus.APPROVED,
+            )
+            .first()
+        )
+        if not my_ok:
+            await callback_query.message.answer(
+                "❌ Этот раздел доступен только для турниров, на которые вы утверждены."
+            )
             return
         rows = (
             session.query(User)

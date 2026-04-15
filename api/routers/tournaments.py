@@ -21,10 +21,23 @@ def list_tournaments(
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
     search: Optional[str] = Query(None, description="Поиск по названию турнира или месяцу"),
+    my_approved_only: bool = Query(
+        False,
+        description="Только турниры, на которые текущий пользователь утверждён (для «кто на фест»)",
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     q = db.query(Tournament)
+    if my_approved_only:
+        q = q.filter(
+            Tournament.tournament_id.in_(
+                db.query(Registration.tournament_id).filter(
+                    Registration.user_id == user.user_id,
+                    Registration.status == RegistrationStatus.APPROVED,
+                )
+            )
+        )
     if month:
         q = q.filter(Tournament.month == month)
     if future_only:
@@ -58,6 +71,20 @@ def list_approved_judges_for_tournament(
     t = db.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
+    my_approved = (
+        db.query(Registration)
+        .filter(
+            Registration.tournament_id == tournament_id,
+            Registration.user_id == user.user_id,
+            Registration.status == RegistrationStatus.APPROVED,
+        )
+        .first()
+    )
+    if not my_approved:
+        raise HTTPException(
+            status_code=403,
+            detail="Доступно только для турниров, на которые вы утверждены",
+        )
     rows = (
         db.query(User)
         .join(Registration, Registration.user_id == User.user_id)

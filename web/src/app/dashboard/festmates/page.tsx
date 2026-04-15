@@ -35,6 +35,7 @@ export default function FestmatesPage() {
     if (!token) return
     const load = () => {
       const params = new URLSearchParams()
+      params.set('my_approved_only', 'true')
       if (monthFilter === 'future') params.set('future_only', 'true')
       else if (monthFilter === 'all') params.set('future_only', 'false')
       else params.set('month', monthFilter)
@@ -96,7 +97,7 @@ export default function FestmatesPage() {
               Кто ещё едет на фест
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Утверждённые судьи по выбранному турниру
+              Турниры, на которые вы утверждены; список коллег по каждому фесту
             </p>
           </div>
           <MonthFilter value={monthFilter} onChange={setMonthFilter} />
@@ -183,7 +184,9 @@ export default function FestmatesPage() {
           )
         })}
         {items.length === 0 && (
-          <p className="py-8 text-center text-slate-500">Нет турниров</p>
+          <p className="py-8 text-center text-slate-500">
+            Нет турниров, на которые вы утверждены — здесь видны только такие фесты.
+          </p>
         )}
       </div>
     </div>
