@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import re
+from html import escape
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from sqlalchemy.exc import SQLAlchemyError, DatabaseError
@@ -475,6 +476,150 @@ async def process_tournament(callback_query: types.CallbackQuery):
         error_monitor = get_error_monitor()
         if error_monitor:
             await error_monitor.log_critical_error(e, "process_tournament", callback_query.from_user.id)
+    finally:
+        session.close()
+        await callback_query.answer()
+
+
+# ======== Кто ещё едет на фест (утверждённые судьи) ========
+async def process_festmates_start(callback_query: types.CallbackQuery):
+    """Выбор месяца для просмотра списка утверждённых судей."""
+    session = SessionLocal()
+    try:
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = [m[0] for m in months_raw if m[0]]
+        if not months:
+            await callback_query.message.answer("❌ В базе нет турниров.")
+            return
+        keyboard = InlineKeyboardMarkup(row_width=3)
+        for month in months:
+            keyboard.insert(
+                InlineKeyboardButton(month, callback_data=f"festmates_month_{month}")
+            )
+        keyboard.add(InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main"))
+        await callback_query.message.answer(
+            "👥 <b>Кто ещё едет на фест</b>\n\n📅 Выберите месяц:",
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML,
+        )
+    except SQLAlchemyError as e:
+        logger.error(f"Ошибка festmates (месяц): {e}")
+        await callback_query.message.answer("❌ Произошла ошибка. Попробуйте позже.")
+    finally:
+        session.close()
+        await callback_query.answer()
+
+
+async def process_festmates_month(callback_query: types.CallbackQuery):
+    """После выбора месяца — список турниров."""
+    prefix = "festmates_month_"
+    if not callback_query.data or not callback_query.data.startswith(prefix):
+        await callback_query.answer()
+        return
+    selected_month = callback_query.data[len(prefix) :]
+    session = SessionLocal()
+    try:
+        tournaments = (
+            session.query(Tournament)
+            .filter(Tournament.month == selected_month)
+            .order_by(Tournament.date)
+            .all()
+        )
+        if not tournaments:
+            await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
+            return
+        keyboard = InlineKeyboardMarkup(row_width=1)
+        for tournament in tournaments:
+            button_text = f"{tournament.date.strftime('%d.%m.%Y')}_{tournament.name}"
+            button_text = button_text.replace("_", " ")
+            keyboard.add(
+                InlineKeyboardButton(
+                    button_text,
+                    callback_data=f"festmates_tour_{tournament.tournament_id}",
+                )
+            )
+        keyboard.add(InlineKeyboardButton("⬅️ Назад", callback_data="festmates"))
+        await callback_query.message.answer(
+            f"🏆 Выберите турнир ({selected_month}):",
+            reply_markup=keyboard,
+        )
+    except SQLAlchemyError as e:
+        logger.error(f"Ошибка festmates (турниры): {e}")
+        await callback_query.message.answer("❌ Произошла ошибка. Попробуйте позже.")
+    finally:
+        session.close()
+        await callback_query.answer()
+
+
+async def process_festmates_tournament(callback_query: types.CallbackQuery):
+    """Показать утверждённых судей на выбранный турнир."""
+    if not callback_query.data or not callback_query.data.startswith("festmates_tour_"):
+        await callback_query.answer()
+        return
+    try:
+        tournament_id = int(callback_query.data.split("_")[-1])
+    except (ValueError, IndexError):
+        await callback_query.answer()
+        return
+    session = SessionLocal()
+    try:
+        tournament = (
+            session.query(Tournament)
+            .filter(Tournament.tournament_id == tournament_id)
+            .first()
+        )
+        if not tournament:
+            await callback_query.message.answer("❌ Турнир не найден.")
+            return
+        rows = (
+            session.query(User)
+            .join(Registration, Registration.user_id == User.user_id)
+            .filter(
+                Registration.tournament_id == tournament_id,
+                Registration.status == RegistrationStatus.APPROVED,
+            )
+            .order_by(User.last_name, User.first_name)
+            .all()
+        )
+        tournament_str = f"{tournament.date.strftime('%d.%m.%Y')} {tournament.name}"
+        safe_title = escape(tournament_str)
+        if not rows:
+            text = (
+                f"👥 <b>Утверждённые судьи</b>\n"
+                f"🏆 <b>{safe_title}</b>\n\n"
+                "Пока нет утверждённых судей на этот турнир."
+            )
+        else:
+            lines = []
+            for u in rows:
+                name = escape(f"{u.first_name} {u.last_name}".strip())
+                fn = escape((u.function or "").strip())
+                if fn:
+                    lines.append(f"• {name} — {fn}")
+                else:
+                    lines.append(f"• {name}")
+            body = "\n".join(lines)
+            text = (
+                f"👥 <b>Утверждённые судьи</b>\n"
+                f"🏆 <b>{safe_title}</b>\n\n"
+                f"{body}"
+            )
+        keyboard = InlineKeyboardMarkup()
+        keyboard.add(
+            InlineKeyboardButton("⬅️ К турнирам", callback_data=f"festmates_month_{tournament.month}")
+        )
+        keyboard.add(InlineKeyboardButton("🔙 В меню", callback_data="back_to_main"))
+        chunks = split_text(text, MAX_MESSAGE_LENGTH)
+        for i, chunk in enumerate(chunks):
+            reply_markup = keyboard if i == len(chunks) - 1 else None
+            await callback_query.message.answer(
+                chunk,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+    except SQLAlchemyError as e:
+        logger.error(f"Ошибка festmates (список): {e}")
+        await callback_query.message.answer("❌ Произошла ошибка. Попробуйте позже.")
     finally:
         session.close()
         await callback_query.answer()

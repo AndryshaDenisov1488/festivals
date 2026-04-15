@@ -22,7 +22,9 @@ from handlers.common_handlers import (
     process_back_to_main, process_cancel_payment_input,
 )
 from handlers.user_handlers import (
-    process_sign_up, process_month, process_tournament, setup_main_menu_button_handlers,
+    process_sign_up, process_month, process_tournament,
+    process_festmates_start, process_festmates_month, process_festmates_tournament,
+    setup_main_menu_button_handlers,
     cmd_link_email, link_email_step, process_link_email_input, process_link_email_code,
     process_cancel_registration, process_cancel_reg_month, process_cancel_reg_id,
     process_confirm_cancel, process_cancel_action,
@@ -263,6 +265,18 @@ setup_main_menu_button_handlers(dp)
 dp.register_callback_query_handler(process_sign_up, Text(equals="sign_up"), state="*")
 dp.register_callback_query_handler(process_month, lambda c: c.data and c.data.startswith("month_"), state="*")
 dp.register_callback_query_handler(process_tournament, lambda c: c.data and c.data.startswith("tournament_"), state="*")
+
+dp.register_callback_query_handler(process_festmates_start, Text(equals="festmates"), state="*")
+dp.register_callback_query_handler(
+    process_festmates_month,
+    lambda c: c.data and c.data.startswith("festmates_month_"),
+    state="*",
+)
+dp.register_callback_query_handler(
+    process_festmates_tournament,
+    lambda c: c.data and c.data.startswith("festmates_tour_"),
+    state="*",
+)
 
 dp.register_callback_query_handler(process_cancel_registration, Text(equals="cancel_registration"), state="*")
 dp.register_callback_query_handler(process_cancel_reg_month, lambda c: c.data and c.data.startswith("cancel_reg_month_"), state="*")

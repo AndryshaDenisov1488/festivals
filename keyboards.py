@@ -7,6 +7,7 @@ def main_menu():
     keyboard = InlineKeyboardMarkup(row_width=1)
     keyboard.add(
         InlineKeyboardButton("🏆 Записаться на турнир", callback_data='sign_up'),
+        InlineKeyboardButton("👥 Кто ещё едет на фест", callback_data='festmates'),
         InlineKeyboardButton("🚫 Отменить запись", callback_data='cancel_registration'),
         InlineKeyboardButton("📋 Мои записи", callback_data='my_registrations'),
         InlineKeyboardButton("💰 Мой заработок", callback_data='my_earnings'),

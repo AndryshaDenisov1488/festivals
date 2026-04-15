@@ -1,14 +1,13 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
-from models import Tournament
+from models import Tournament, Registration, RegistrationStatus, User
 from api.dependencies import get_db, get_current_user
 from api.utils import format_date, filter_by_search
-from models import User
 from utils.date_utils import get_today
 
 
@@ -49,6 +48,37 @@ def list_tournaments(
     ]
 
 
+@router.get("/{tournament_id}/approved-judges")
+def list_approved_judges_for_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Список утверждённых судей на турнир (для судей: кто ещё едет на фест)."""
+    t = db.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    rows = (
+        db.query(User)
+        .join(Registration, Registration.user_id == User.user_id)
+        .filter(
+            Registration.tournament_id == tournament_id,
+            Registration.status == RegistrationStatus.APPROVED,
+        )
+        .order_by(User.last_name, User.first_name)
+        .all()
+    )
+    return [
+        {
+            "user_id": u.user_id,
+            "name": f"{u.first_name} {u.last_name}".strip(),
+            "function": u.function,
+            "category": u.category,
+        }
+        for u in rows
+    ]
+
+
 @router.get("/{tournament_id}")
 def get_tournament(
     tournament_id: int,
@@ -57,7 +87,6 @@ def get_tournament(
 ):
     t = db.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
     if not t:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Tournament not found")
     return {
         "tournament_id": t.tournament_id,

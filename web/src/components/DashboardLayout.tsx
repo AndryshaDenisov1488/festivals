@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
   Trophy,
+  Users,
   ClipboardList,
   Wallet,
   User,
@@ -132,6 +133,7 @@ function SetPasswordModal({
 const navItems = [
   { href: '/dashboard', label: 'Обзор', icon: LayoutDashboard },
   { href: '/dashboard/tournaments', label: 'Турниры', icon: Trophy },
+  { href: '/dashboard/festmates', label: 'Кто на фест', icon: Users },
   { href: '/dashboard/registrations', label: 'Заявки', icon: ClipboardList },
   { href: '/dashboard/earnings', label: 'Выплаты', icon: Wallet },
   { href: '/dashboard/profile', label: 'Профиль', icon: User }
