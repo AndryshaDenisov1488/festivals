@@ -620,26 +620,14 @@ async def process_festmates_tournament(callback_query: types.CallbackQuery):
         tournament_str = f"{tournament.date.strftime('%d.%m.%Y')} {tournament.name}"
         safe_title = escape(tournament_str)
         if not rows:
-            text = (
-                f"👥 <b>Утверждённые судьи</b>\n"
-                f"🏆 <b>{safe_title}</b>\n\n"
-                "Пока нет утверждённых судей на этот турнир."
-            )
+            text = f"🏆 <b>{safe_title}</b>\n\nПока никого в списке."
         else:
             lines = []
             for u in rows:
                 name = escape(f"{u.first_name} {u.last_name}".strip())
-                fn = escape((u.function or "").strip())
-                if fn:
-                    lines.append(f"• {name} — {fn}")
-                else:
-                    lines.append(f"• {name}")
+                lines.append(f"• {name}")
             body = "\n".join(lines)
-            text = (
-                f"👥 <b>Утверждённые судьи</b>\n"
-                f"🏆 <b>{safe_title}</b>\n\n"
-                f"{body}"
-            )
+            text = f"🏆 <b>{safe_title}</b>\n\n{body}"
         keyboard = InlineKeyboardMarkup()
         keyboard.add(
             InlineKeyboardButton("⬅️ К турнирам", callback_data=f"festmates_month_{tournament.month}")

@@ -97,7 +97,7 @@ export default function FestmatesPage() {
               Кто ещё едет на фест
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Турниры, на которые вы утверждены; список коллег по каждому фесту
+              Турниры, на которые вы утверждены — кто едет вместе с вами
             </p>
           </div>
           <MonthFilter value={monthFilter} onChange={setMonthFilter} />
@@ -136,7 +136,7 @@ export default function FestmatesPage() {
                   className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-100"
                 >
                   <Users className="h-4 w-4" aria-hidden />
-                  {isOpen ? 'Скрыть список' : 'Утверждённые судьи'}
+                  {isOpen ? 'Скрыть' : 'Кто едет'}
                   {isOpen ? (
                     <ChevronUp className="h-4 w-4" aria-hidden />
                   ) : (
@@ -145,38 +145,31 @@ export default function FestmatesPage() {
                 </button>
               </div>
               {isOpen && (
-                <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-3">
+                <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50/90 to-white px-4 py-4">
                   {loadingRow && (
                     <p className="text-sm text-slate-500">Загрузка...</p>
                   )}
                   {!loadingRow && judges && judges.length === 0 && (
                     <p className="text-sm text-slate-600">
-                      На этот турнир пока нет утверждённых судей.
+                      Пока никого в списке.
                     </p>
                   )}
                   {!loadingRow && judges && judges.length > 0 && (
-                    <ul className="space-y-2" role="list">
-                      {judges.map((j) => (
-                        <li
-                          key={j.user_id}
-                          className="text-sm text-slate-800"
-                        >
-                          <span className="font-medium">{j.name}</span>
-                          {j.function ? (
-                            <span className="text-slate-600">
-                              {' '}
-                              — {j.function}
-                            </span>
-                          ) : null}
-                          {j.category ? (
-                            <span className="text-slate-500">
-                              {' '}
-                              ({j.category})
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
+                    <div>
+                      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
+                        Едут на фест
+                      </p>
+                      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100 bg-white" role="list">
+                        {judges.map((j) => (
+                          <li
+                            key={j.user_id}
+                            className="px-3 py-2.5 text-[15px] text-slate-800 first:rounded-t-lg last:rounded-b-lg"
+                          >
+                            {j.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               )}
