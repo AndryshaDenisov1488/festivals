@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
 from database import SessionLocal
-from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
+from models import User, Tournament, Registration, RegistrationStatus, JudgePayment, RegistrationCancellation
 from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
 from api.dependencies import get_current_admin
 from api.utils import format_date, filter_by_search
@@ -16,6 +16,32 @@ from utils.date_utils import get_today
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _get_current_season_start() -> date:
+    current_date = get_today()
+    if current_date.month >= 9:
+        return date(current_date.year, 9, 1)
+    return date(current_date.year - 1, 9, 1)
+
+
+def _get_current_season_end() -> date:
+    current_date = get_today()
+    if current_date.month >= 9:
+        return date(current_date.year + 1, 5, 31)
+    return date(current_date.year, 5, 31)
+
+
+def _get_responsibility_label(approved_refusal_pct: float) -> str:
+    if approved_refusal_pct <= 5:
+        return "Очень высокая"
+    if approved_refusal_pct <= 12:
+        return "Высокая"
+    if approved_refusal_pct <= 20:
+        return "Средняя"
+    if approved_refusal_pct <= 35:
+        return "Низкая"
+    return "Очень низкая"
 
 
 class BroadcastIn(BaseModel):
@@ -117,6 +143,87 @@ def admin_list_registrations(
             }
             for r in regs
         ]
+    finally:
+        db.close()
+
+
+@router.get("/registrations/refusals-stats")
+def admin_registration_refusals_stats(
+    admin: User = Depends(get_current_admin),
+):
+    db = SessionLocal()
+    try:
+        season_start = _get_current_season_start()
+        season_end = _get_current_season_end()
+        season_end_exclusive = season_end + timedelta(days=1)
+
+        season_rows = (
+            db.query(RegistrationCancellation.previous_status, func.count(RegistrationCancellation.cancellation_id))
+            .filter(
+                and_(
+                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
+                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
+                )
+            )
+            .group_by(RegistrationCancellation.previous_status)
+            .all()
+        )
+
+        season_total_refusals = sum(cnt for _, cnt in season_rows)
+        season_approved_refusals = next((cnt for status, cnt in season_rows if status == RegistrationStatus.APPROVED), 0)
+        season_approved_refusal_pct = round((season_approved_refusals / season_total_refusals) * 100, 1) if season_total_refusals > 0 else 0.0
+        responsibility_score = max(0, round(100 - season_approved_refusal_pct, 1))
+
+        month_rows = (
+            db.query(
+                func.strftime('%Y-%m', RegistrationCancellation.cancelled_at).label('month_key'),
+                RegistrationCancellation.previous_status,
+                func.count(RegistrationCancellation.cancellation_id).label('cnt'),
+            )
+            .filter(
+                and_(
+                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
+                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
+                )
+            )
+            .group_by('month_key', RegistrationCancellation.previous_status)
+            .all()
+        )
+
+        month_stats: dict[str, dict[str, int]] = {}
+        for month_key, previous_status, cnt in month_rows:
+            if month_key not in month_stats:
+                month_stats[month_key] = {"total": 0, "approved": 0}
+            month_stats[month_key]["total"] += cnt
+            if previous_status == RegistrationStatus.APPROVED:
+                month_stats[month_key]["approved"] += cnt
+
+        monthly = []
+        for month_key in sorted(month_stats.keys()):
+            total = month_stats[month_key]["total"]
+            approved = month_stats[month_key]["approved"]
+            year, month = month_key.split('-')
+            month_name = MONTH_NAMES_RU[int(month) - 1]
+            monthly.append({
+                "month_key": month_key,
+                "month": f"{month_name} {year}",
+                "total_refusals": total,
+                "approved_refusals": approved,
+                "approved_refusal_pct": round((approved / total) * 100, 1) if total > 0 else 0.0,
+            })
+
+        return {
+            "season": {
+                "start": season_start.strftime('%d.%m.%Y'),
+                "end": season_end.strftime('%d.%m.%Y'),
+                "total_refusals": season_total_refusals,
+                "approved_refusals": season_approved_refusals,
+                "approved_refusal_pct": season_approved_refusal_pct,
+                "responsibility_score": responsibility_score,
+                "responsibility_label": _get_responsibility_label(season_approved_refusal_pct),
+            },
+            "monthly": monthly,
+        }
     finally:
         db.close()
 

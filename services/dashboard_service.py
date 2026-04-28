@@ -11,7 +11,7 @@ from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import joinedload
 
 from database import SessionLocal
-from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
+from models import User, Tournament, Registration, RegistrationStatus, JudgePayment, RegistrationCancellation
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ class DashboardService:
                 'recent_activity': await self._get_recent_activity(),
                 'season_info': await self._get_season_info(),
                 'budget': await self._get_budget_stats(),
+                'refusals': await self._get_refusals_stats(),
                 'alerts': await self._get_alerts()
             }
             return dashboard_data
@@ -453,6 +454,90 @@ class DashboardService:
                 'total_admin_profit': 0.0,
                 'tournaments_with_budget': 0,
                 'avg_profitability': 0.0
+            }
+
+    async def _get_refusals_stats(self) -> Dict[str, Any]:
+        """Статистика по отказам судей от турниров"""
+        try:
+            season_start = self._get_current_season_start()
+            season_end = self._get_current_season_end()
+            season_end_exclusive = season_end + timedelta(days=1)
+
+            season_rows = self.session.query(
+                RegistrationCancellation.previous_status,
+                func.count(RegistrationCancellation.cancellation_id).label('cnt')
+            ).filter(
+                and_(
+                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
+                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
+                )
+            ).group_by(RegistrationCancellation.previous_status).all()
+
+            season_total = sum(row[1] for row in season_rows)
+            season_approved = next((row[1] for row in season_rows if row[0] == RegistrationStatus.APPROVED), 0)
+            season_approved_pct = round((season_approved / season_total) * 100, 1) if season_total > 0 else 0.0
+
+            if season_approved_pct <= 5:
+                responsibility_label = "Очень высокая"
+            elif season_approved_pct <= 12:
+                responsibility_label = "Высокая"
+            elif season_approved_pct <= 20:
+                responsibility_label = "Средняя"
+            elif season_approved_pct <= 35:
+                responsibility_label = "Низкая"
+            else:
+                responsibility_label = "Очень низкая"
+
+            month_rows = self.session.query(
+                func.strftime('%Y-%m', RegistrationCancellation.cancelled_at).label('month_key'),
+                RegistrationCancellation.previous_status,
+                func.count(RegistrationCancellation.cancellation_id).label('cnt')
+            ).filter(
+                and_(
+                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
+                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
+                )
+            ).group_by('month_key', RegistrationCancellation.previous_status).all()
+
+            month_stats = {}
+            for month_key, previous_status, cnt in month_rows:
+                if month_key not in month_stats:
+                    month_stats[month_key] = {'total': 0, 'approved': 0}
+                month_stats[month_key]['total'] += cnt
+                if previous_status == RegistrationStatus.APPROVED:
+                    month_stats[month_key]['approved'] += cnt
+
+            month_names = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+            monthly = []
+            for month_key in sorted(month_stats.keys()):
+                total = month_stats[month_key]['total']
+                approved = month_stats[month_key]['approved']
+                year, month = month_key.split('-')
+                monthly.append({
+                    'month_key': month_key,
+                    'month': f"{month_names[int(month) - 1]} {year}",
+                    'total_refusals': total,
+                    'approved_refusals': approved,
+                    'approved_refusal_pct': round((approved / total) * 100, 1) if total > 0 else 0.0
+                })
+
+            return {
+                'season_total_refusals': season_total,
+                'season_approved_refusals': season_approved,
+                'season_approved_refusal_pct': season_approved_pct,
+                'responsibility_label': responsibility_label,
+                'responsibility_score': max(0, round(100 - season_approved_pct, 1)),
+                'monthly': monthly
+            }
+        except Exception as e:
+            logger.error(f"Ошибка при получении статистики отказов: {e}")
+            return {
+                'season_total_refusals': 0,
+                'season_approved_refusals': 0,
+                'season_approved_refusal_pct': 0.0,
+                'responsibility_label': 'Нет данных',
+                'responsibility_score': 100.0,
+                'monthly': []
             }
 
 # Глобальный экземпляр сервиса

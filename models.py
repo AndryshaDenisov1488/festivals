@@ -75,6 +75,27 @@ class Registration(Base):
         Index('idx_user_status', 'user_id', 'status'),
     )
 
+
+class RegistrationCancellation(Base):
+    __tablename__ = 'registration_cancellations'
+
+    cancellation_id = Column(Integer, primary_key=True, index=True)
+    registration_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
+    tournament_id = Column(Integer, ForeignKey('tournaments.tournament_id', ondelete='CASCADE'), nullable=False)
+    previous_status = Column(String, nullable=False)
+    cancelled_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user = relationship("User")
+    tournament = relationship("Tournament")
+
+    __table_args__ = (
+        Index('idx_cancellation_user', 'user_id'),
+        Index('idx_cancellation_tournament', 'tournament_id'),
+        Index('idx_cancellation_previous_status', 'previous_status'),
+        Index('idx_cancellation_cancelled_at', 'cancelled_at'),
+    )
+
 class JudgePayment(Base):
     """Таблица для отслеживания оплаты судей"""
     __tablename__ = 'judge_payments'

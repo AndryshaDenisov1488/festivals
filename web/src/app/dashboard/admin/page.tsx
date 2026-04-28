@@ -49,6 +49,29 @@ type AdminTournament = {
   month: string
 }
 
+type RefusalsMonthlyStat = {
+  month_key: string
+  month: string
+  total_refusals: number
+  approved_refusals: number
+  approved_refusal_pct: number
+}
+
+type RefusalsSeasonStat = {
+  start: string
+  end: string
+  total_refusals: number
+  approved_refusals: number
+  approved_refusal_pct: number
+  responsibility_score: number
+  responsibility_label: string
+}
+
+type RefusalsStatsResponse = {
+  season: RefusalsSeasonStat
+  monthly: RefusalsMonthlyStat[]
+}
+
 export default function AdminPage() {
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [broadcastLoading, setBroadcastLoading] = useState(false)
@@ -66,6 +89,7 @@ export default function AdminPage() {
 
   const [registrations, setRegistrations] = useState<AdminRegistration[]>([])
   const [regsLoading, setRegsLoading] = useState(false)
+  const [refusalsStats, setRefusalsStats] = useState<RefusalsStatsResponse | null>(null)
   const [regsFilter, setRegsFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('pending')
   const [regsMonthFilter, setRegsMonthFilter] = useState<MonthFilterValue>('future')
   const [regsSearch, setRegsSearch] = useState('')
@@ -183,6 +207,10 @@ export default function AdminPage() {
       .then(setRegistrations)
       .catch(() => setRegistrations([]))
       .finally(() => setRegsLoading(false))
+
+    api<RefusalsStatsResponse>('/api/v1/admin/registrations/refusals-stats', { token })
+      .then(setRefusalsStats)
+      .catch(() => setRefusalsStats(null))
   }
 
   const loadUsers = () => {
@@ -1116,6 +1144,61 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+        {refusalsStats?.season && (
+          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50/40 p-4">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-rose-800">
+              Ответственность судей по отказам
+            </h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
+                <p className="text-xs text-slate-500">Сезон</p>
+                <p className="text-sm font-medium text-slate-800">
+                  {refusalsStats.season.start} - {refusalsStats.season.end}
+                </p>
+              </div>
+              <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
+                <p className="text-xs text-slate-500">Всего отказов</p>
+                <p className="text-lg font-semibold text-slate-800">{refusalsStats.season.total_refusals}</p>
+              </div>
+              <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
+                <p className="text-xs text-slate-500">Отказы при одобрении</p>
+                <p className="text-lg font-semibold text-rose-700">
+                  {refusalsStats.season.approved_refusals} ({refusalsStats.season.approved_refusal_pct}%)
+                </p>
+              </div>
+              <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
+                <p className="text-xs text-slate-500">Ответственность</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {refusalsStats.season.responsibility_label} ({refusalsStats.season.responsibility_score}/100)
+                </p>
+              </div>
+            </div>
+            {refusalsStats.monthly.length > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-rose-200">
+                      <th className="px-2 py-2 text-left">Месяц</th>
+                      <th className="px-2 py-2 text-right">Все отказы</th>
+                      <th className="px-2 py-2 text-right">При одобрении</th>
+                      <th className="px-2 py-2 text-right">% при одобрении</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refusalsStats.monthly.map((row) => (
+                      <tr key={row.month_key} className="border-b border-rose-100 last:border-b-0">
+                        <td className="px-2 py-2 text-slate-700">{row.month}</td>
+                        <td className="px-2 py-2 text-right text-slate-700">{row.total_refusals}</td>
+                        <td className="px-2 py-2 text-right text-rose-700">{row.approved_refusals}</td>
+                        <td className="px-2 py-2 text-right text-slate-700">{row.approved_refusal_pct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         {regsLoading ? (
           <div className="py-4 text-center text-slate-500">Загрузка...</div>
         ) : (

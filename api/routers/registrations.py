@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
-from models import Registration, Tournament, User
+from models import Registration, Tournament, User, RegistrationCancellation
 from models import RegistrationStatus
 from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
 from api.dependencies import get_current_user, get_db
@@ -186,6 +186,14 @@ async def cancel_registration(
         RegistrationStatus.REJECTED: "Отклонено"
     }
     previous_status = status_i18n.get(reg.status, reg.status)
+
+    cancellation = RegistrationCancellation(
+        registration_id=reg.registration_id,
+        user_id=user.user_id,
+        tournament_id=reg.tournament_id,
+        previous_status=reg.status,
+    )
+    db.add(cancellation)
 
     db.query(JudgePayment).filter(
         JudgePayment.user_id == user.user_id,
