@@ -1,4 +1,6 @@
 import os
+import sys
+import types
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -7,6 +9,46 @@ os.environ.setdefault("BOT_TOKEN", "test-token")
 os.environ.setdefault("ADMIN_IDS", "1")
 os.environ.setdefault("CHANNEL_ID", "-1001")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
+
+def install_payment_system_import_stubs():
+    sqlalchemy = types.ModuleType("sqlalchemy")
+    sqlalchemy.and_ = lambda *args: ("and", args)
+    sqlalchemy.func = SimpleNamespace()
+
+    sqlalchemy_orm = types.ModuleType("sqlalchemy.orm")
+    sqlalchemy_orm.Session = object
+
+    sqlalchemy_exc = types.ModuleType("sqlalchemy.exc")
+    sqlalchemy_exc.DatabaseError = Exception
+
+    models = types.ModuleType("models")
+    models.JudgePayment = object
+    models.User = object
+    models.Tournament = object
+    models.Registration = object
+    models.RegistrationStatus = SimpleNamespace(APPROVED="approved")
+
+    database = types.ModuleType("database")
+    database.SessionLocal = lambda: None
+
+    action_logger = types.ModuleType("utils.action_logger")
+    action_logger.get_action_logger = lambda: None
+    action_logger.ActionType = SimpleNamespace(
+        ADMIN_CREATE_PAYMENT_RECORDS="admin_create_payment_records",
+        USER_CONFIRM_PAYMENT="user_confirm_payment",
+        USER_REPORT_UNPAID="user_report_unpaid",
+    )
+
+    sys.modules["sqlalchemy"] = sqlalchemy
+    sys.modules["sqlalchemy.orm"] = sqlalchemy_orm
+    sys.modules["sqlalchemy.exc"] = sqlalchemy_exc
+    sys.modules["models"] = models
+    sys.modules["database"] = database
+    sys.modules["utils.action_logger"] = action_logger
+
+
+install_payment_system_import_stubs()
 
 from services.payment_system import PaymentSystem  # noqa: E402
 
