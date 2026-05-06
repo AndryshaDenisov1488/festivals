@@ -50,7 +50,11 @@ def install_payment_system_import_stubs():
 
 install_payment_system_import_stubs()
 
-from services.payment_system import PaymentSystem  # noqa: E402
+from services.payment_system import (  # noqa: E402
+    PAYMENT_REMINDER_ACTION_IGNORED,
+    PAYMENT_REMINDER_ACTION_QUESTION,
+    PaymentSystem,
+)
 
 
 class PaymentReminderDecisionTest(unittest.TestCase):
@@ -62,15 +66,26 @@ class PaymentReminderDecisionTest(unittest.TestCase):
     def msk(self, year, month, day, hour, minute=0):
         return self.msk_tz.localize(datetime(year, month, day, hour, minute))
 
-    def payment(self, *, reminder_sent=False, reminder_date=None):
+    def payment(
+        self,
+        *,
+        reminder_sent=False,
+        reminder_date=None,
+        is_paid=False,
+        last_payment_response_date=None,
+        last_ignore_reminder_date=None,
+    ):
         return SimpleNamespace(
             tournament=SimpleNamespace(date=self.tournament_date),
+            is_paid=is_paid,
             reminder_sent=reminder_sent,
             reminder_date=reminder_date,
+            last_payment_response_date=last_payment_response_date,
+            last_ignore_reminder_date=last_ignore_reminder_date,
         )
 
     def test_judge_reminder_waits_until_18_msk_on_tournament_day(self):
-        should_send, _ = self.payment_system._should_send_judge_payment_reminder(
+        should_send, _, _ = self.payment_system._should_send_judge_payment_reminder(
             self.payment(),
             self.msk(2026, 5, 6, 17, 59),
         )
@@ -78,63 +93,66 @@ class PaymentReminderDecisionTest(unittest.TestCase):
         self.assertFalse(should_send)
 
     def test_judge_first_reminder_is_due_from_18_msk(self):
-        should_send, _ = self.payment_system._should_send_judge_payment_reminder(
+        should_send, _, action = self.payment_system._should_send_judge_payment_reminder(
             self.payment(),
             self.msk(2026, 5, 6, 18),
         )
 
         self.assertTrue(should_send)
+        self.assertEqual(PAYMENT_REMINDER_ACTION_QUESTION, action)
 
-    def test_judge_repeat_reminder_is_due_after_six_hours(self):
+    def test_judge_ignore_followup_is_due_after_thirty_minutes_without_answer(self):
         first_sent_at_utc = datetime(2026, 5, 6, 15, tzinfo=timezone.utc)
 
-        should_send, _ = self.payment_system._should_send_judge_payment_reminder(
+        too_early, _, _ = self.payment_system._should_send_judge_payment_reminder(
             self.payment(reminder_sent=True, reminder_date=first_sent_at_utc),
-            self.msk(2026, 5, 7, 0),
+            self.msk(2026, 5, 6, 18, 29),
+        )
+        should_send, _, action = self.payment_system._should_send_judge_payment_reminder(
+            self.payment(reminder_sent=True, reminder_date=first_sent_at_utc),
+            self.msk(2026, 5, 6, 18, 30),
+        )
+
+        self.assertFalse(too_early)
+        self.assertTrue(should_send)
+        self.assertEqual(PAYMENT_REMINDER_ACTION_IGNORED, action)
+
+    def test_judge_six_hour_check_continues_after_unpaid_answer(self):
+        unpaid_answer_at_utc = datetime(2026, 5, 6, 15, 5, tzinfo=timezone.utc)
+
+        should_send, _, action = self.payment_system._should_send_judge_payment_reminder(
+            self.payment(
+                reminder_sent=True,
+                reminder_date=unpaid_answer_at_utc,
+                last_payment_response_date=unpaid_answer_at_utc,
+            ),
+            self.msk(2026, 5, 7, 0, 5),
         )
 
         self.assertTrue(should_send)
+        self.assertEqual(PAYMENT_REMINDER_ACTION_QUESTION, action)
 
-    def test_judge_reminders_stop_after_negative_answer_marker(self):
-        stop_marker_utc = datetime(2027, 5, 6, 15, tzinfo=timezone.utc)
+    def test_judge_six_hour_check_waits_after_unpaid_answer(self):
+        unpaid_answer_at_utc = datetime(2026, 5, 6, 15, 5, tzinfo=timezone.utc)
 
-        should_send, _ = self.payment_system._should_send_judge_payment_reminder(
-            self.payment(reminder_sent=True, reminder_date=stop_marker_utc),
-            self.msk(2026, 5, 7, 0),
+        should_send, _, _ = self.payment_system._should_send_judge_payment_reminder(
+            self.payment(
+                reminder_sent=True,
+                reminder_date=unpaid_answer_at_utc,
+                last_payment_response_date=unpaid_answer_at_utc,
+            ),
+            self.msk(2026, 5, 6, 23),
         )
 
         self.assertFalse(should_send)
 
-    def test_judge_reminders_stop_after_planned_attempt_limit(self):
-        should_send, _ = self.payment_system._should_send_judge_payment_reminder(
-            self.payment(),
+    def test_judge_reminders_stop_after_paid_confirmation(self):
+        should_send, _, _ = self.payment_system._should_send_judge_payment_reminder(
+            self.payment(is_paid=True),
             self.msk(2026, 5, 8, 0),
         )
 
         self.assertFalse(should_send)
-
-    def test_admin_reminder_uses_same_schedule_window(self):
-        before_first, _ = self.payment_system._should_include_in_admin_payment_reminder(
-            self.payment(),
-            self.msk(2026, 5, 6, 17, 59),
-        )
-        first_due, _ = self.payment_system._should_include_in_admin_payment_reminder(
-            self.payment(),
-            self.msk(2026, 5, 6, 18),
-        )
-        repeat_due, _ = self.payment_system._should_include_in_admin_payment_reminder(
-            self.payment(),
-            self.msk(2026, 5, 7, 0),
-        )
-        after_limit, _ = self.payment_system._should_include_in_admin_payment_reminder(
-            self.payment(),
-            self.msk(2026, 5, 8, 0),
-        )
-
-        self.assertFalse(before_first)
-        self.assertTrue(first_due)
-        self.assertTrue(repeat_due)
-        self.assertFalse(after_limit)
 
 
 if __name__ == "__main__":

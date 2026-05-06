@@ -1091,6 +1091,7 @@ async def process_payment_no(callback_query: types.CallbackQuery):
         await callback_query.message.answer(
             "😔 <b>Понятно...</b>\n\n"
             "Мы уведомили администратора о том, что оплата не поступила.\n"
+            "Когда деньги придут, нажмите «Да, заплатил» в следующем вопросе и укажите сумму.\n"
             "Надеемся, что ситуация скоро решится! 🤞",
             parse_mode=ParseMode.HTML
         )

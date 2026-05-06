@@ -108,6 +108,9 @@ class JudgePayment(Base):
     payment_date = Column(DateTime, nullable=True)  # Дата оплаты
     reminder_sent = Column(Boolean, default=False, nullable=False)  # Отправлено ли напоминание
     reminder_date = Column(DateTime, nullable=True)  # Дата отправки напоминания
+    last_payment_response_status = Column(String(20), nullable=True)  # paid/unpaid - последний ответ судьи
+    last_payment_response_date = Column(DateTime, nullable=True)  # Когда судья последний раз ответил
+    last_ignore_reminder_date = Column(DateTime, nullable=True)  # Последнее 30-минутное напоминание об игноре
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     
     user = relationship("User")
@@ -119,6 +122,8 @@ class JudgePayment(Base):
         Index('idx_tournament_payment', 'tournament_id'),
         Index('idx_payment_status', 'is_paid'),
         Index('idx_reminder_status', 'reminder_sent'),
+        Index('idx_payment_response_status', 'last_payment_response_status'),
+        Index('idx_payment_response_date', 'last_payment_response_date'),
         # Ограничения для валидации данных
         CheckConstraint('amount IS NULL OR amount >= 0', name='check_amount_positive'),
     )

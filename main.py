@@ -150,7 +150,11 @@ async def reminder_job():
 
 async def payment_reminder_job():
     """
-    Проверяем, нужно ли отправить напоминания об оплате (в 18:00 в день турнира и каждые 6 часов).
+    Проверяем, нужно ли отправить вопросы судьям об оплате.
+
+    Джоба запускается каждые 30 минут: обычные проверки отфильтровываются
+    внутри сервиса до 6-часового интервала, а проигнорированные вопросы
+    повторяются каждые 30 минут.
     """
     try:
         from services.payment_system import get_payment_system
@@ -160,11 +164,6 @@ async def payment_reminder_job():
         reminders_sent = await payment_system.send_payment_reminders()
         if reminders_sent > 0:
             logger.info(f"[payment_reminder_job] Sent {reminders_sent} payment reminders")
-        
-        # Отправляем напоминания админу
-        admin_reminders_sent = await payment_system.send_admin_reminders()
-        if admin_reminders_sent > 0:
-            logger.info(f"[payment_reminder_job] Sent {admin_reminders_sent} admin reminders")
             
     except Exception as e:
         logger.exception("[payment_reminder_job] Unexpected error")
@@ -208,15 +207,10 @@ async def on_startup(_):
     scheduler.add_job(reminder_job, trigger="cron", hour=0, minute=0,
                       id="reminder_job", replace_existing=True)
     
-    # запуск джобы для напоминаний об оплате в 18:00 в день турнира и каждые 6 часов
-    scheduler.add_job(payment_reminder_job, trigger="cron", hour=18, minute=0,
-                      id="payment_reminder_job_18", replace_existing=True)
-    scheduler.add_job(payment_reminder_job, trigger="cron", hour=0, minute=0,
-                      id="payment_reminder_job_00", replace_existing=True)
-    scheduler.add_job(payment_reminder_job, trigger="cron", hour=6, minute=0,
-                      id="payment_reminder_job_06", replace_existing=True)
-    scheduler.add_job(payment_reminder_job, trigger="cron", hour=12, minute=0,
-                      id="payment_reminder_job_12", replace_existing=True)
+    # запуск джобы для вопросов об оплате: каждые 30 минут для контроля игнора,
+    # 6-часовой интервал обычных вопросов соблюдается внутри сервиса.
+    scheduler.add_job(payment_reminder_job, trigger="cron", minute="*/30",
+                      id="payment_reminder_job", replace_existing=True)
     
     # запуск джобы для напоминаний о бюджете каждые 12 часов (12:00 и 00:00 Мск)
     scheduler.add_job(budget_reminder_job, trigger="cron", hour=12, minute=0,
