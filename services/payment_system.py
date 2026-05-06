@@ -4,7 +4,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
@@ -18,12 +18,118 @@ from utils.action_logger import get_action_logger, ActionType
 
 logger = logging.getLogger(__name__)
 
+PAYMENT_REMINDER_FIRST_HOUR = 18
+PAYMENT_REMINDER_INTERVAL_HOURS = 6
+PAYMENT_REMINDER_MAX_DAYS = 7
+PAYMENT_REMINDER_MAX_ATTEMPTS = 5
+PAYMENT_RESPONSE_STOP_MARKER_DAYS = 30
+
 class PaymentSystem:
     """Класс для управления системой оплаты судей"""
     
     def __init__(self, bot):
         self.bot = bot
         self.action_logger = get_action_logger()
+
+    @staticmethod
+    def _msk_timezone():
+        return pytz.timezone('Europe/Moscow')
+
+    def _first_payment_reminder_at(self, tournament_date) -> datetime:
+        """Первое плановое напоминание: 18:00 МСК в день турнира."""
+        msk_tz = self._msk_timezone()
+        first_at = datetime.combine(
+            tournament_date,
+            time(hour=PAYMENT_REMINDER_FIRST_HOUR),
+        )
+        return msk_tz.localize(first_at)
+
+    def _as_msk(self, value: datetime) -> datetime:
+        """Даты напоминаний храним как UTC; SQLite может вернуть их без tzinfo."""
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(self._msk_timezone())
+
+    def _scheduled_payment_reminder_number(self, tournament_date, now_msk: datetime) -> int:
+        """
+        Номер планового слота напоминания.
+
+        0 означает, что 18:00 МСК в день турнира еще не наступило.
+        1 — слот в 18:00, 2 — через 6 часов, и так далее.
+        """
+        first_at = self._first_payment_reminder_at(tournament_date)
+        if now_msk < first_at:
+            return 0
+        elapsed_hours = (now_msk - first_at).total_seconds() / 3600
+        return 1 + int(elapsed_hours // PAYMENT_REMINDER_INTERVAL_HOURS)
+
+    def _is_judge_response_stop_marker(self, reminder_date: Optional[datetime], now_msk: datetime) -> bool:
+        if not reminder_date:
+            return False
+        reminder_msk = self._as_msk(reminder_date)
+        return (reminder_msk.date() - now_msk.date()).days > PAYMENT_RESPONSE_STOP_MARKER_DAYS
+
+    def _should_send_judge_payment_reminder(self, payment: JudgePayment, now_msk: datetime) -> tuple[bool, str]:
+        days_since_tournament = (now_msk.date() - payment.tournament.date).days
+        if days_since_tournament < 0:
+            return False, "турнир еще не прошел"
+        if days_since_tournament > PAYMENT_REMINDER_MAX_DAYS:
+            return False, (
+                f"прошло {days_since_tournament} дней с турнира "
+                f"(максимум {PAYMENT_REMINDER_MAX_DAYS})"
+            )
+
+        if self._is_judge_response_stop_marker(payment.reminder_date, now_msk):
+            return False, "судья уже ответил на напоминание"
+
+        reminder_number = self._scheduled_payment_reminder_number(payment.tournament.date, now_msk)
+        if reminder_number == 0:
+            return False, "первое напоминание еще не наступило"
+        if reminder_number > PAYMENT_REMINDER_MAX_ATTEMPTS:
+            return False, (
+                f"достигнут лимит плановых напоминаний "
+                f"({PAYMENT_REMINDER_MAX_ATTEMPTS})"
+            )
+
+        if not payment.reminder_sent:
+            return True, "первое напоминание"
+
+        if not payment.reminder_date:
+            return False, "напоминание уже помечено отправленным, но дата отсутствует"
+
+        last_reminder_msk = self._as_msk(payment.reminder_date)
+        if last_reminder_msk > now_msk:
+            return False, "дата последнего напоминания находится в будущем"
+
+        hours_since_last = (now_msk - last_reminder_msk).total_seconds() / 3600
+        if hours_since_last >= PAYMENT_REMINDER_INTERVAL_HOURS:
+            return True, "повторное напоминание"
+
+        return False, (
+            f"прошло {hours_since_last:.1f} часов с последнего напоминания "
+            f"(нужно {PAYMENT_REMINDER_INTERVAL_HOURS})"
+        )
+
+    def _should_include_in_admin_payment_reminder(self, payment: JudgePayment, now_msk: datetime) -> tuple[bool, str]:
+        days_since_tournament = (now_msk.date() - payment.tournament.date).days
+        if days_since_tournament < 0:
+            return False, "турнир еще не прошел"
+        if days_since_tournament > PAYMENT_REMINDER_MAX_DAYS:
+            return False, (
+                f"прошло {days_since_tournament} дней с турнира "
+                f"(максимум {PAYMENT_REMINDER_MAX_DAYS})"
+            )
+
+        reminder_number = self._scheduled_payment_reminder_number(payment.tournament.date, now_msk)
+        if reminder_number == 0:
+            return False, "первое админское напоминание еще не наступило"
+        if reminder_number > PAYMENT_REMINDER_MAX_ATTEMPTS:
+            return False, (
+                f"достигнут лимит плановых админских напоминаний "
+                f"({PAYMENT_REMINDER_MAX_ATTEMPTS})"
+            )
+
+        return True, "напоминание админу актуально"
     
     async def create_payment_records(self, tournament_id: int) -> bool:
         """Создает записи об оплате для всех утвержденных судей турнира"""
@@ -214,27 +320,32 @@ class PaymentSystem:
         return result
     
     async def send_payment_reminders(self) -> int:
-        """Отправляет напоминания об оплате судьям (в 18:00 в день турнира и каждые 12 часов)"""
-        # ВАЖНО: Сначала синхронизируем записи об оплате для сегодняшних турниров
-        # Это гарантирует, что напоминания отправляются только фактически утвержденным судьям
+        """
+        Отправляет напоминания судьям: первый слот в 18:00 МСК в день турнира,
+        затем каждые 6 часов до лимита плановых попыток.
+        """
+        # Сначала синхронизируем сегодняшние турниры: новые утвержденные судьи
+        # должны получить запись об оплате до первого напоминания.
         await self.sync_payment_records_for_today()
         
         session = SessionLocal()
         reminders_sent = 0
         
         try:
-            # Находим турниры, которые проходят сегодня (используем MSK timezone)
-            msk_tz = pytz.timezone('Europe/Moscow')
-            today = datetime.now(msk_tz).date()
+            msk_tz = self._msk_timezone()
+            now_msk = datetime.now(msk_tz)
+            today = now_msk.date()
+            window_start = today - timedelta(days=PAYMENT_REMINDER_MAX_DAYS)
             
-            # Получаем все неоплаченные записи для турниров, которые проходят сегодня
-            # Используем пагинацию для предотвращения утечек памяти
+            # Берем не только сегодняшний турнир: повторные слоты наступают уже
+            # на следующие даты после турнира.
             unpaid_payments = session.query(JudgePayment).join(Tournament).filter(
                 and_(
-                    Tournament.date == today,
+                    Tournament.date >= window_start,
+                    Tournament.date <= today,
                     JudgePayment.is_paid == False
                 )
-            ).limit(100).all()  # Ограничиваем количество записей
+            ).limit(500).all()
             
             for payment in unpaid_payments:
                 # ВАЖНО: Проверяем, что регистрация все еще существует и имеет статус APPROVED
@@ -255,67 +366,16 @@ class PaymentSystem:
                     )
                     continue
                 try:
-                    # Проверяем, нужно ли отправить напоминание
-                    should_send = False
-                    msk_tz = pytz.timezone('Europe/Moscow')
-                    now_msk = datetime.now(msk_tz)
-                    today_msk = now_msk.date()
-                    
-                    # Ограничение: не отправляем напоминания после 7 дней с турнира
-                    days_since_tournament = (today_msk - payment.tournament.date).days
-                    MAX_REMINDER_DAYS = 7
-                    
-                    if days_since_tournament > MAX_REMINDER_DAYS:
-                        # Прошло больше 7 дней - прекращаем напоминания
+                    should_send, reason = self._should_send_judge_payment_reminder(payment, now_msk)
+                    if not should_send:
                         logger.info(
-                            f"Пропущено напоминание для payment_id={payment.payment_id}: "
-                            f"прошло {days_since_tournament} дней с турнира (максимум {MAX_REMINDER_DAYS})"
+                            f"Пропущено напоминание для payment_id={payment.payment_id}: {reason}"
                         )
                         continue
-                    
-                    # Ограничение: максимум 5 напоминаний (первое + 4 повторных)
-                    # Подсчитываем количество напоминаний по дате последнего напоминания
-                    # Если reminder_date установлен, значит уже было хотя бы одно напоминание
-                    MAX_REMINDERS = 5
-                    reminder_count = 0
-                    if payment.reminder_date:
-                        # Приблизительно считаем количество напоминаний
-                        # Первое напоминание в 18:00, затем каждые 6 часов
-                        # За 7 дней максимум: 1 + (7*24/6) = 29, но мы ограничим до MAX_REMINDERS
-                        # Используем более простую логику: если прошло больше 2 дней и было много напоминаний
-                        hours_since_first = (now_msk - payment.reminder_date.replace(tzinfo=timezone.utc).astimezone(msk_tz)).total_seconds() / 3600
-                        estimated_reminders = 1 + int(hours_since_first / 6)  # Первое + каждые 6 часов
-                        if estimated_reminders >= MAX_REMINDERS:
-                            logger.info(
-                                f"Пропущено напоминание для payment_id={payment.payment_id}: "
-                                f"достигнут лимит напоминаний (примерно {estimated_reminders})"
-                            )
-                            continue
-                    
-                    if not payment.reminder_sent:
-                        # Первое напоминание в 18:00 в день турнира
-                        if now_msk.hour >= 18:
-                            should_send = True
-                    elif payment.reminder_date:
-                        # Проверяем, не установлена ли дата напоминания далеко в будущем
-                        # (это означает, что судья уже ответил "Нет" и напоминания нужно прекратить)
-                        last_reminder_msk = payment.reminder_date.replace(tzinfo=timezone.utc).astimezone(msk_tz)
-                        days_until_reminder = (last_reminder_msk.date() - today_msk).days
-                        
-                        # Если дата напоминания больше чем через 30 дней - это специальная отметка
-                        # что судья уже ответил и напоминания нужно прекратить
-                        if days_until_reminder > 30:
-                            logger.info(
-                                f"Пропущено напоминание для payment_id={payment.payment_id}: "
-                                f"судья уже ответил на напоминание"
-                            )
-                            continue
-                        
-                        # Повторные напоминания каждые 6 часов после первого
-                        hours_since_last = (now_msk - last_reminder_msk).total_seconds() / 3600
-                        if hours_since_last >= 6:
-                            should_send = True
-                    
+
+                    logger.info(
+                        f"Отправляем напоминание для payment_id={payment.payment_id}: {reason}"
+                    )
                     if should_send:
                         # Отправляем напоминание судье
                         await self._send_payment_reminder(payment)
@@ -343,19 +403,21 @@ class PaymentSystem:
         """Отправляет напоминание об оплате конкретному судье"""
         from keyboards import payment_reminder_keyboard
         
+        now_msk = datetime.now(self._msk_timezone())
+        days_since_tournament = (now_msk.date() - payment.tournament.date).days
+
         # Определяем тип напоминания
         if not payment.reminder_sent:
             # Первое напоминание - вежливое
             message = (
                 f"💰 <b>Напоминание об оплате</b>\n\n"
                 f"Привет, {payment.user.first_name}!\n\n"
-                f"Прошёл день с турнира <b>«{payment.tournament.name}»</b> "
+                f"Турнир <b>«{payment.tournament.name}»</b> уже прошёл "
                 f"({payment.tournament.date.strftime('%d.%m.%Y')}).\n\n"
                 f"Андрюша заплатил вам за этот турнир? 🤔"
             )
         else:
             # Повторное напоминание - более настойчивое
-            days_since_tournament = (datetime.now().date() - payment.tournament.date).days
             message = (
                 f"⚠️ <b>ПОВТОРНОЕ НАПОМИНАНИЕ ОБ ОПЛАТЕ</b>\n\n"
                 f"Привет, {payment.user.first_name}!\n\n"
@@ -499,29 +561,31 @@ class PaymentSystem:
                 logger.error(f"Ошибка при отправке уведомления админу {admin_id}: {e}")
     
     async def send_admin_reminders(self) -> int:
-        """Отправляет напоминания админу о неоплаченных судьях в 18:00 в день турнира и каждые 6 часов после"""
+        """
+        Отправляет напоминания админу о неоплаченных судьях: первый слот
+        в 18:00 МСК в день турнира, затем каждые 6 часов до лимита
+        плановых попыток.
+        """
+        await self.sync_payment_records_for_today()
+
         session = SessionLocal()
         reminders_sent = 0
         
         try:
-            # Находим турниры, которые проходят сегодня (используем MSK timezone)
-            msk_tz = pytz.timezone('Europe/Moscow')
+            msk_tz = self._msk_timezone()
             now_msk = datetime.now(msk_tz)
             today = now_msk.date()
-            
-            # ВАЖНО: Напоминания админу отправляем только в 18:00 и позже в день турнира
-            # Не отправляем в 00:00, 06:00, 12:00 - только в 18:00 и каждые 6 часов после
-            if now_msk.hour < 18:
-                logger.info(f"Напоминания админу пропущены: текущее время {now_msk.hour}:{now_msk.minute:02d}, требуется >= 18:00")
-                return 0
-            
-            # Получаем все неоплаченные записи для турниров, которые проходят сегодня
+            window_start = today - timedelta(days=PAYMENT_REMINDER_MAX_DAYS)
+
+            # Повторные напоминания админу относятся и к прошедшим турнирам,
+            # пока не вышли за общий лимит.
             unpaid_payments = session.query(JudgePayment).join(Tournament).filter(
                 and_(
-                    Tournament.date == today,
+                    Tournament.date >= window_start,
+                    Tournament.date <= today,
                     JudgePayment.is_paid == False
                 )
-            ).limit(100).all()
+            ).limit(500).all()
             
             # Фильтруем только те, где регистрация все еще существует и утверждена
             valid_unpaid_payments = []
@@ -533,8 +597,21 @@ class PaymentSystem:
                         Registration.status == RegistrationStatus.APPROVED
                     )
                 ).first()
-                if registration:
-                    valid_unpaid_payments.append(payment)
+                if not registration:
+                    logger.warning(
+                        f"Пропущено админское напоминание для payment_id={payment.payment_id}: "
+                        f"регистрация не найдена или не утверждена (user_id={payment.user_id}, tournament_id={payment.tournament_id})"
+                    )
+                    continue
+
+                should_include, reason = self._should_include_in_admin_payment_reminder(payment, now_msk)
+                if not should_include:
+                    logger.info(
+                        f"Пропущено админское напоминание для payment_id={payment.payment_id}: {reason}"
+                    )
+                    continue
+
+                valid_unpaid_payments.append(payment)
             
             if not valid_unpaid_payments:
                 return 0
