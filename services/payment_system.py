@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 PAYMENT_REMINDER_FIRST_HOUR = 18
 PAYMENT_REMINDER_INTERVAL_HOURS = 6
 PAYMENT_IGNORE_REMINDER_MINUTES = 30
+PAYMENT_REMINDER_STOP_AFTER_DAYS = 2
 PAYMENT_REMINDER_ACTION_QUESTION = "question"
 PAYMENT_REMINDER_ACTION_IGNORED = "ignored"
 
@@ -77,6 +78,13 @@ class PaymentSystem:
     def _should_send_judge_payment_reminder(self, payment: JudgePayment, now_msk: datetime) -> tuple[bool, str, str]:
         if payment.is_paid:
             return False, "оплата уже подтверждена", PAYMENT_REMINDER_ACTION_QUESTION
+
+        days_since_tournament = (now_msk.date() - payment.tournament.date).days
+        if days_since_tournament >= PAYMENT_REMINDER_STOP_AFTER_DAYS:
+            return False, (
+                f"прошло {days_since_tournament} дней с турнира "
+                f"(стоп после {PAYMENT_REMINDER_STOP_AFTER_DAYS})"
+            ), PAYMENT_REMINDER_ACTION_QUESTION
 
         first_at = self._first_payment_reminder_at(payment.tournament.date)
         if now_msk < first_at:
@@ -316,11 +324,14 @@ class PaymentSystem:
             msk_tz = self._msk_timezone()
             now_msk = datetime.now(msk_tz)
             today = now_msk.date()
+            window_start = today - timedelta(days=PAYMENT_REMINDER_STOP_AFTER_DAYS - 1)
             
             # Берем все прошедшие/сегодняшние неоплаченные турниры: вопрос
-            # продолжается до подтверждения оплаты с суммой.
+            # продолжается до подтверждения оплаты с суммой, но не дольше
+            # двух календарных дней после турнира.
             unpaid_payments = session.query(JudgePayment).join(Tournament).filter(
                 and_(
+                    Tournament.date >= window_start,
                     Tournament.date <= today,
                     JudgePayment.is_paid == False
                 )

@@ -53,6 +53,7 @@ install_payment_system_import_stubs()
 from services.payment_system import (  # noqa: E402
     PAYMENT_REMINDER_ACTION_IGNORED,
     PAYMENT_REMINDER_ACTION_QUESTION,
+    PAYMENT_REMINDER_STOP_AFTER_DAYS,
     PaymentSystem,
 )
 
@@ -153,6 +154,17 @@ class PaymentReminderDecisionTest(unittest.TestCase):
         )
 
         self.assertFalse(should_send)
+
+    def test_judge_reminders_stop_two_calendar_days_after_tournament(self):
+        first_sent_at_utc = datetime(2026, 5, 6, 15, tzinfo=timezone.utc)
+
+        should_send, reason, _ = self.payment_system._should_send_judge_payment_reminder(
+            self.payment(reminder_sent=True, reminder_date=first_sent_at_utc),
+            self.msk(2026, 5, 8, 0),
+        )
+
+        self.assertFalse(should_send)
+        self.assertIn(f"стоп после {PAYMENT_REMINDER_STOP_AFTER_DAYS}", reason)
 
 
 if __name__ == "__main__":
