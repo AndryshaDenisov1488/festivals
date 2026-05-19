@@ -152,9 +152,9 @@ async def payment_reminder_job():
     """
     Проверяем, нужно ли отправить вопросы судьям об оплате.
 
-    Джоба запускается каждые 30 минут: обычные проверки отфильтровываются
-    внутри сервиса до 6-часового интервала, а проигнорированные вопросы
-    повторяются каждые 30 минут.
+    Джоба запускается каждый час: обычные проверки отфильтровываются
+    внутри сервиса до 8-часового интервала, а проигнорированные вопросы
+    повторяются каждые 2 часа.
     """
     try:
         from services.payment_system import get_payment_system
@@ -203,13 +203,13 @@ async def on_startup(_):
     # Очистка старых задач планировщика
     scheduler.remove_all_jobs()
     
-    # запуск ежедневной джобы в 00:00 Мск
-    scheduler.add_job(reminder_job, trigger="cron", hour=0, minute=0,
+    # запуск ежедневной джобы в 15:00 Мск
+    scheduler.add_job(reminder_job, trigger="cron", hour=15, minute=0,
                       id="reminder_job", replace_existing=True)
     
-    # запуск джобы для вопросов об оплате: каждые 30 минут для контроля игнора,
-    # 6-часовой интервал обычных вопросов соблюдается внутри сервиса.
-    scheduler.add_job(payment_reminder_job, trigger="cron", minute="*/30",
+    # запуск джобы для вопросов об оплате: каждый час; 8-часовой и 2-часовой
+    # интервалы соблюдаются внутри сервиса.
+    scheduler.add_job(payment_reminder_job, trigger="cron", minute=7,
                       id="payment_reminder_job", replace_existing=True)
     
     # запуск джобы для напоминаний о бюджете каждые 12 часов (12:00 и 00:00 Мск)

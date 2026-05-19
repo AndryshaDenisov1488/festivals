@@ -102,23 +102,23 @@ class PaymentReminderDecisionTest(unittest.TestCase):
         self.assertTrue(should_send)
         self.assertEqual(PAYMENT_REMINDER_ACTION_QUESTION, action)
 
-    def test_judge_ignore_followup_is_due_after_thirty_minutes_without_answer(self):
+    def test_judge_ignore_followup_is_due_after_two_hours_without_answer(self):
         first_sent_at_utc = datetime(2026, 5, 6, 15, tzinfo=timezone.utc)
 
         too_early, _, _ = self.payment_system._should_send_judge_payment_reminder(
             self.payment(reminder_sent=True, reminder_date=first_sent_at_utc),
-            self.msk(2026, 5, 6, 18, 29),
+            self.msk(2026, 5, 6, 19, 59),
         )
         should_send, _, action = self.payment_system._should_send_judge_payment_reminder(
             self.payment(reminder_sent=True, reminder_date=first_sent_at_utc),
-            self.msk(2026, 5, 6, 18, 30),
+            self.msk(2026, 5, 6, 20, 0),
         )
 
         self.assertFalse(too_early)
         self.assertTrue(should_send)
         self.assertEqual(PAYMENT_REMINDER_ACTION_IGNORED, action)
 
-    def test_judge_six_hour_check_continues_after_unpaid_answer(self):
+    def test_judge_eight_hour_check_continues_after_unpaid_answer(self):
         unpaid_answer_at_utc = datetime(2026, 5, 6, 15, 5, tzinfo=timezone.utc)
 
         should_send, _, action = self.payment_system._should_send_judge_payment_reminder(
@@ -127,13 +127,13 @@ class PaymentReminderDecisionTest(unittest.TestCase):
                 reminder_date=unpaid_answer_at_utc,
                 last_payment_response_date=unpaid_answer_at_utc,
             ),
-            self.msk(2026, 5, 7, 0, 5),
+            self.msk(2026, 5, 7, 2, 5),
         )
 
         self.assertTrue(should_send)
         self.assertEqual(PAYMENT_REMINDER_ACTION_QUESTION, action)
 
-    def test_judge_six_hour_check_waits_after_unpaid_answer(self):
+    def test_judge_eight_hour_check_waits_after_unpaid_answer(self):
         unpaid_answer_at_utc = datetime(2026, 5, 6, 15, 5, tzinfo=timezone.utc)
 
         should_send, _, _ = self.payment_system._should_send_judge_payment_reminder(

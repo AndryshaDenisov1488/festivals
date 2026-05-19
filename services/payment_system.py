@@ -19,8 +19,8 @@ from utils.action_logger import get_action_logger, ActionType
 logger = logging.getLogger(__name__)
 
 PAYMENT_REMINDER_FIRST_HOUR = 18
-PAYMENT_REMINDER_INTERVAL_HOURS = 6
-PAYMENT_IGNORE_REMINDER_MINUTES = 30
+PAYMENT_REMINDER_INTERVAL_HOURS = 8
+PAYMENT_IGNORE_REMINDER_HOURS = 2
 PAYMENT_REMINDER_STOP_AFTER_DAYS = 2
 PAYMENT_REMINDER_ACTION_QUESTION = "question"
 PAYMENT_REMINDER_ACTION_IGNORED = "ignored"
@@ -95,12 +95,12 @@ class PaymentSystem:
 
         latest_prompt = self._latest_payment_prompt_at(payment)
         if latest_prompt and self._has_unanswered_payment_prompt(payment):
-            minutes_since_prompt = (now_msk - self._as_msk(latest_prompt)).total_seconds() / 60
-            if minutes_since_prompt >= PAYMENT_IGNORE_REMINDER_MINUTES:
+            hours_since_prompt = (now_msk - self._as_msk(latest_prompt)).total_seconds() / 3600
+            if hours_since_prompt >= PAYMENT_IGNORE_REMINDER_HOURS:
                 return True, "судья не ответил на вопрос об оплате", PAYMENT_REMINDER_ACTION_IGNORED
             return False, (
-                f"с последнего вопроса без ответа прошло {minutes_since_prompt:.1f} минут "
-                f"(нужно {PAYMENT_IGNORE_REMINDER_MINUTES})"
+                f"с последнего вопроса без ответа прошло {hours_since_prompt:.1f} часов "
+                f"(нужно {PAYMENT_IGNORE_REMINDER_HOURS})"
             ), PAYMENT_REMINDER_ACTION_IGNORED
 
         last_check_at = payment.reminder_date
@@ -110,7 +110,7 @@ class PaymentSystem:
 
         hours_since_check = (now_msk - self._as_msk(last_check_at)).total_seconds() / 3600
         if hours_since_check >= PAYMENT_REMINDER_INTERVAL_HOURS:
-            return True, "плановая 6-часовая проверка оплаты", PAYMENT_REMINDER_ACTION_QUESTION
+            return True, "плановая 8-часовая проверка оплаты", PAYMENT_REMINDER_ACTION_QUESTION
 
         return False, (
             f"после последней проверки прошло {hours_since_check:.1f} часов "
@@ -310,8 +310,8 @@ class PaymentSystem:
         Отправляет вопросы судьям об оплате.
 
         Обычная проверка начинается в 18:00 МСК в день турнира и дальше идет
-        каждые 6 часов до подтверждения оплаты. Если судья не нажал ни одну
-        кнопку после последнего вопроса, бот напоминает об этом каждые 30 минут.
+        каждые 8 часов до подтверждения оплаты. Если судья не нажал ни одну
+        кнопку после последнего вопроса, бот напоминает об этом каждые 2 часа.
         """
         # Сначала синхронизируем сегодняшние турниры: новые утвержденные судьи
         # должны получить запись об оплате до первого напоминания.
@@ -525,7 +525,7 @@ class PaymentSystem:
                 payment.last_payment_response_date = now_utc
                 payment.last_ignore_reminder_date = None
                 payment.reminder_sent = True
-                # Следующая плановая проверка пойдет через 6 часов после ответа "Нет".
+                # Следующая плановая проверка пойдет через 8 часов после ответа "Нет".
                 payment.reminder_date = now_utc
 
                 if self.bot:
