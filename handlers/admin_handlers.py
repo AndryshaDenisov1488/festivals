@@ -19,6 +19,8 @@ from services.excel_export import export_data, split_text
 from utils.calendar import build_calendar, prev_month, next_month  # <- твой модуль календаря
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
+from utils.text_utils import is_affirmative_answer
+from utils.date_utils import sort_month_names
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 logger = logging.getLogger(__name__)
@@ -408,7 +410,7 @@ async def view_tournaments(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         months_raw = session.query(Tournament.month).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет созданных турниров.")
             return
@@ -454,7 +456,7 @@ async def edit_tournament_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         months_raw = session.query(Tournament.month).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для изменения.")
             return
@@ -566,7 +568,7 @@ async def check_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         months_raw = session.query(Tournament.month).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
             return
@@ -710,7 +712,7 @@ async def process_delete_month(cb: types.CallbackQuery, state: FSMContext):
     await state.update_data(month=month)
     session = SessionLocal()
     try:
-        tours = session.query(Tournament).filter(Tournament.month == month).all()
+        tours = session.query(Tournament).filter(Tournament.month == month).order_by(Tournament.date).all()
     finally:
         session.close()
 
@@ -889,7 +891,7 @@ async def admin_review_registrations(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         months_raw = session.query(Tournament.month).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
             return
@@ -1088,13 +1090,13 @@ async def admin_earnings_monthly(callback_query: types.CallbackQuery):
             JudgePayment, Tournament.tournament_id == JudgePayment.tournament_id
         ).filter(
             JudgePayment.is_paid == True
-        ).distinct().order_by(Tournament.month).all()
+        ).distinct().all()
         
         if not months:
             await callback_query.message.answer("❌ Нет данных о заработке судей.")
             return
         
-        month_list = [month[0] for month in months]
+        month_list = sort_month_names(month[0] for month in months)
         from keyboards import month_selection_earnings_keyboard
         await callback_query.message.answer(
             "📅 Выберите месяц для просмотра заработка:",
@@ -1272,7 +1274,7 @@ async def process_manual_payment_judge(callback_query: types.CallbackQuery, stat
                 JudgePayment.user_id == user_id,
                 JudgePayment.is_paid == False
             )
-        ).join(Tournament).order_by(Tournament.date.desc()).all()
+        ).join(Tournament).order_by(Tournament.date).all()
         
         if not unpaid_payments:
             await callback_query.message.answer(
@@ -1366,15 +1368,37 @@ async def process_manual_payment_amount(message: types.Message, state: FSMContex
         if not message.text:
             await message.answer("❌ Пожалуйста, отправьте текстовое сообщение.")
             return
-        
-        amount = float(message.text.strip().replace(',', '.'))
-        if amount <= 0:
-            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
-            return
-        
+
         data = await state.get_data()
         payment_id = data.get('payment_id')
         is_special_judge = data.get('is_special_judge', False)
+        pending_amount = data.get('pending_amount')
+        confirmed_non_standard = False
+
+        if pending_amount is not None:
+            if is_affirmative_answer(message.text):
+                amount = pending_amount
+                confirmed_non_standard = True
+                await state.update_data(pending_amount=None)
+            else:
+                try:
+                    amount = float(message.text.strip().replace(',', '.'))
+                    await state.update_data(pending_amount=None)
+                except ValueError:
+                    await message.answer(
+                        "❌ Введите «да» для подтверждения или новую сумму (например: 5000):"
+                    )
+                    return
+        else:
+            try:
+                amount = float(message.text.strip().replace(',', '.'))
+            except ValueError:
+                await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
+                return
+
+        if amount <= 0:
+            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
+            return
         
         if not payment_id:
             await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
@@ -1392,28 +1416,18 @@ async def process_manual_payment_amount(message: types.Message, state: FSMContex
         
         # Проверка стандартной суммы (только для обычных судей)
         STANDARD_PAYMENT_AMOUNT = 5000
-        if not is_special_judge and amount != STANDARD_PAYMENT_AMOUNT:
+        if (
+            not confirmed_non_standard
+            and not is_special_judge
+            and amount != STANDARD_PAYMENT_AMOUNT
+        ):
             await message.answer(
-                f"⚠️ Внимание! Стандартная сумма для всех судей (кроме Лизочки Марковой) составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
+                f"⚠️ Внимание! Стандартная сумма для всех судей составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
                 f"Вы ввели {amount} руб.\n\n"
-                f"Продолжить с этой суммой? (введите 'да' для подтверждения или новую сумму):"
+                f"Продолжить с этой суммой? (введите «да» для подтверждения или новую сумму):"
             )
-            # Сохраняем сумму для подтверждения
             await state.update_data(pending_amount=amount)
             return
-        
-        # Если была попытка ввести нестандартную сумму, проверяем подтверждение
-        pending_amount = data.get('pending_amount')
-        if pending_amount and message.text.lower() not in ['да', 'yes', 'y', 'д']:
-            # Пользователь ввел новую сумму или отменил
-            try:
-                new_amount = float(message.text.strip().replace(',', '.'))
-                amount = new_amount
-                await state.update_data(pending_amount=None)
-            except ValueError:
-                await message.answer("❌ Ввод отменен. Используйте /admin для возврата в меню.")
-                await state.finish()
-                return
         
         # Получаем информацию о платеже для логирования
         session = SessionLocal()
@@ -1452,10 +1466,7 @@ async def process_manual_payment_amount(message: types.Message, state: FSMContex
             session.close()
         
         await state.finish()
-        
-    except ValueError:
-        await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
-        return
+
     except Exception as e:
         logger.error(f"Неожиданная ошибка в process_manual_payment_amount: {e}")
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")

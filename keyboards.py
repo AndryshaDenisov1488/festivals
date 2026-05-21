@@ -1,5 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from utils.date_utils import sort_month_names
+
 def main_menu():
     """
     Главное меню для пользователя (судьи).
@@ -57,7 +59,7 @@ def month_selection_keyboard(months: list, callback_prefix: str, back_callback: 
     Универсальная клавиатура выбора месяца
     """
     keyboard = InlineKeyboardMarkup(row_width=3)
-    for month in months:
+    for month in sort_month_names(months):
         keyboard.insert(InlineKeyboardButton(month, callback_data=f'{callback_prefix}_{month}'))
     keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data=back_callback))
     return keyboard
@@ -115,7 +117,7 @@ def month_selection_earnings_keyboard(months: list):
     Клавиатура выбора месяца для заработка
     """
     keyboard = InlineKeyboardMarkup(row_width=3)
-    for month in months:
+    for month in sort_month_names(months):
         keyboard.insert(InlineKeyboardButton(month, callback_data=f'earnings_month_{month}'))
     keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data='admin_judge_earnings'))
     return keyboard
@@ -148,8 +150,8 @@ def group_budget_reminder_keyboard(tournaments):
     """
     keyboard = InlineKeyboardMarkup(row_width=1)
     
-    # Добавляем кнопки для каждого турнира
-    for i, tournament in enumerate(tournaments, 1):
+    # Добавляем кнопки для каждого турнира (по дате внутри дня)
+    for i, tournament in enumerate(sorted(tournaments, key=lambda t: t.date), 1):
         # Ограничиваем длину названия турнира
         tournament_name = tournament.name[:30] + "..." if len(tournament.name) > 30 else tournament.name
         keyboard.add(

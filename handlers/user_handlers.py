@@ -16,6 +16,8 @@ from keyboards import main_menu
 from services.excel_export import split_text
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
+from utils.text_utils import is_affirmative_answer
+from utils.date_utils import sort_month_names, sort_by_tournament_date
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 # Разрешаем буквы RU/EN + дефис, длина 2..30
@@ -336,7 +338,7 @@ async def process_sign_up(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         months_raw = session.query(Tournament.month).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для записи.")
             return
@@ -497,7 +499,7 @@ async def process_festmates_start(callback_query: types.CallbackQuery):
             .distinct()
             .all()
         )
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer(
                 "ℹ️ Нет турниров, на которые вы утверждены. "
@@ -660,7 +662,7 @@ async def process_cancel_registration(callback_query: types.CallbackQuery):
         months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == user_id
         ).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
 
         if not months:
             await callback_query.message.answer("❌ У вас нет записей на турниры.")
@@ -685,10 +687,12 @@ async def process_cancel_reg_month(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
-        registrations = session.query(Registration).join(Tournament).filter(
-            Registration.user_id == user_id,
-            Tournament.month == selected_month
-        ).all()
+        registrations = sort_by_tournament_date(
+            session.query(Registration).join(Tournament).filter(
+                Registration.user_id == user_id,
+                Tournament.month == selected_month
+            ).all()
+        )
 
         if not registrations:
             await callback_query.message.answer(f"❌ У вас нет записей в {selected_month}.")
@@ -820,7 +824,7 @@ async def my_registrations_step(callback_query: types.CallbackQuery):
         months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == callback_query.from_user.id
         ).distinct().all()
-        months = [m[0] for m in months_raw if m[0]]
+        months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ У вас нет записей на турниры.")
             return
@@ -842,10 +846,12 @@ async def process_my_registrations_month(callback_query: types.CallbackQuery, st
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        regs = session.query(Registration).join(Tournament).filter(
-            Registration.user_id == callback_query.from_user.id,
-            Tournament.month == selected_month
-        ).all()
+        regs = sort_by_tournament_date(
+            session.query(Registration).join(Tournament).filter(
+                Registration.user_id == callback_query.from_user.id,
+                Tournament.month == selected_month
+            ).all()
+        )
         if not regs:
             await callback_query.message.answer(f"❌ У вас нет записей на турниры в {selected_month}.")
             await state.finish()
@@ -1205,7 +1211,7 @@ async def process_correct_earnings(callback_query: types.CallbackQuery, state: F
                 JudgePayment.user_id == user_id,
                 JudgePayment.is_paid == True
             )
-        ).join(Tournament).order_by(Tournament.date.desc()).limit(20).all()
+        ).join(Tournament).order_by(Tournament.date).limit(20).all()
         
         if not paid_payments:
             await callback_query.message.answer(
@@ -1331,15 +1337,37 @@ async def process_correct_earnings_amount(message: types.Message, state: FSMCont
         if not message.text:
             await message.answer("❌ Пожалуйста, отправьте текстовое сообщение.")
             return
-        
-        amount = float(message.text.strip().replace(',', '.'))
-        if amount <= 0:
-            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
-            return
-        
+
         data = await state.get_data()
         payment_id = data.get('payment_id')
         is_special_judge = data.get('is_special_judge', False)
+        pending_amount = data.get('pending_amount')
+        confirmed_non_standard = False
+
+        if pending_amount is not None:
+            if is_affirmative_answer(message.text):
+                amount = pending_amount
+                confirmed_non_standard = True
+                await state.update_data(pending_amount=None)
+            else:
+                try:
+                    amount = float(message.text.strip().replace(',', '.'))
+                    await state.update_data(pending_amount=None)
+                except ValueError:
+                    await message.answer(
+                        "❌ Введите «да» для подтверждения или новую сумму (например: 5000):"
+                    )
+                    return
+        else:
+            try:
+                amount = float(message.text.strip().replace(',', '.'))
+            except ValueError:
+                await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
+                return
+
+        if amount <= 0:
+            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
+            return
         
         if not payment_id:
             await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
@@ -1376,26 +1404,18 @@ async def process_correct_earnings_amount(message: types.Message, state: FSMCont
             
             # Проверка стандартной суммы (только для обычных судей)
             STANDARD_PAYMENT_AMOUNT = 5000
-            if not is_special_judge and amount != STANDARD_PAYMENT_AMOUNT:
+            if (
+                not confirmed_non_standard
+                and not is_special_judge
+                and amount != STANDARD_PAYMENT_AMOUNT
+            ):
                 await message.answer(
-                    f"⚠️ Внимание! Стандартная сумма для всех судей (кроме Лизочки Марковой) составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
+                    f"⚠️ Внимание! Стандартная сумма для всех судей составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
                     f"Вы ввели {amount} руб.\n\n"
-                    f"Продолжить с этой суммой? (введите 'да' для подтверждения или новую сумму):"
+                    f"Продолжить с этой суммой? (введите «да» для подтверждения или новую сумму):"
                 )
                 await state.update_data(pending_amount=amount)
                 return
-            
-            # Если была попытка ввести нестандартную сумму, проверяем подтверждение
-            pending_amount = data.get('pending_amount')
-            if pending_amount and message.text.lower() not in ['да', 'yes', 'y', 'д']:
-                try:
-                    new_amount = float(message.text.strip().replace(',', '.'))
-                    amount = new_amount
-                    await state.update_data(pending_amount=None)
-                except ValueError:
-                    await message.answer("❌ Ввод отменен. Используйте /start для возврата в меню.")
-                    await state.finish()
-                    return
             
             # Обновляем сумму
             old_amount = payment.amount
@@ -1428,10 +1448,7 @@ async def process_correct_earnings_amount(message: types.Message, state: FSMCont
             session.close()
         
         await state.finish()
-        
-    except ValueError:
-        await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
-        return
+
     except Exception as e:
         logger.error(f"Неожиданная ошибка в process_correct_earnings_amount: {e}")
         await message.answer("❌ Произошла ошибка. Попробуйте позже.")

@@ -45,7 +45,7 @@ class BudgetService:
                         self.session.query(TournamentBudget.tournament_id)
                     )
                 )
-            ).order_by(Tournament.name).all()
+            ).order_by(Tournament.date).all()
             
             # Фильтруем только существующие турниры (дополнительная проверка)
             valid_tournaments = []
