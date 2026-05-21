@@ -20,7 +20,7 @@ from utils.calendar import build_calendar, prev_month, next_month  # <- твой
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from utils.text_utils import is_affirmative_answer
-from utils.date_utils import sort_month_names
+from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 logger = logging.getLogger(__name__)
@@ -149,10 +149,7 @@ async def admin_actions(callback_query: types.CallbackQuery, state: FSMContext):
 
 # ========== Добавление турнира ==========
 async def add_tournament_step(callback_query: types.CallbackQuery):
-    months = [
-        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-    ]
+    months = list(SEASON_MONTHS)
     kb = InlineKeyboardMarkup(row_width=3)
     for m in months:
         kb.insert(InlineKeyboardButton(m, callback_data=f'add_tournament_month_{m}'))
@@ -166,8 +163,11 @@ async def process_add_tournament_month(callback_query: types.CallbackQuery, stat
     selected_month = callback_query.data.split('_')[-1]
     await state.update_data(month=selected_month)
 
-    # Покажем календарь с текущим месяцем (твой build_calendar принимает текущую дату/месяц)
-    await callback_query.message.answer("🗓️ Выберите дату турнира:", reply_markup=build_calendar())
+    year, month_num = month_name_to_year_month(selected_month)
+    await callback_query.message.answer(
+        "🗓️ Выберите дату турнира:",
+        reply_markup=build_calendar((year, month_num)),
+    )
     await AddTournament.waiting_for_date.set()
     await callback_query.answer()
 
@@ -505,7 +505,18 @@ async def process_edit_tournament_month(callback_query: types.CallbackQuery, sta
 async def process_edit_tournament_selection(callback_query: types.CallbackQuery, state: FSMContext):
     tournament_id = int(callback_query.data.split('_')[-1])
     await state.update_data(tournament_id=tournament_id)
-    await callback_query.message.answer("🗓️ Выберите новую дату турнира:", reply_markup=build_calendar())
+    session = SessionLocal()
+    try:
+        tournament = session.query(Tournament).filter(
+            Tournament.tournament_id == tournament_id
+        ).first()
+        if tournament:
+            cal = build_calendar((tournament.date.year, tournament.date.month))
+        else:
+            cal = build_calendar()
+    finally:
+        session.close()
+    await callback_query.message.answer("🗓️ Выберите новую дату турнира:", reply_markup=cal)
     await EditTournament.waiting_for_new_date.set()
     await callback_query.answer()
 
@@ -659,10 +670,15 @@ async def process_export_period(callback_query: types.CallbackQuery):
 
 
 async def select_month_for_export(callback_query: types.CallbackQuery):
-    months = [
-        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-    ]
+    session = SessionLocal()
+    try:
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = sort_month_names(m[0] for m in months_raw if m[0])
+    finally:
+        session.close()
+    if not months:
+        await callback_query.message.answer("❌ Нет турниров для выгрузки по месяцам.")
+        return
     kb = InlineKeyboardMarkup(row_width=3)
     for m in months:
         kb.insert(InlineKeyboardButton(m, callback_data=f'export_month_{m}'))
@@ -694,10 +710,16 @@ async def process_export_year(callback_query: types.CallbackQuery):
 
 # ========== Удаление турнира ==========
 async def delete_tournament_step(callback_query: types.CallbackQuery):
-    months = [
-        "Январь","Февраль","Март","Апрель","Май","Июнь",
-        "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"
-    ]
+    session = SessionLocal()
+    try:
+        months_raw = session.query(Tournament.month).distinct().all()
+        months = sort_month_names(m[0] for m in months_raw if m[0])
+    finally:
+        session.close()
+    if not months:
+        await callback_query.message.answer("❌ Нет турниров для удаления.")
+        await callback_query.answer()
+        return
     kb = InlineKeyboardMarkup(row_width=3)
     for m in months:
         kb.insert(InlineKeyboardButton(m, callback_data=f'delete_month_{m}'))
