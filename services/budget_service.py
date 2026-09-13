@@ -12,6 +12,7 @@ import pytz
 
 from database import SessionLocal
 from models import Tournament, TournamentBudget, JudgePayment, User, Registration, RegistrationStatus
+from utils.season import get_current_season_key, get_season_date_range
 
 logger = logging.getLogger(__name__)
 
@@ -322,11 +323,8 @@ class BudgetService:
     
     def _get_current_season_start(self) -> date:
         """Получает дату начала текущего сезона"""
-        current_date = date.today()
-        if current_date.month >= 9:  # Сентябрь и позже
-            return date(current_date.year, 9, 1)
-        else:  # До сентября
-            return date(current_date.year - 1, 9, 1)
+        start, _ = get_season_date_range(get_current_season_key())
+        return start
 
 # Глобальный экземпляр сервиса
 _budget_service = None

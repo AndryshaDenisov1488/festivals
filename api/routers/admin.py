@@ -12,36 +12,38 @@ from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
 from api.dependencies import get_current_admin
 from api.utils import format_date, filter_by_search
 from utils.date_utils import get_today
+from utils.season import (
+    get_current_season_key,
+    get_season_date_range,
+    list_seasons,
+    normalize_season_param,
+    season_label,
+)
+from utils.registration_cancellation import (
+    season_cancellation_filter,
+    approved_cancellation_filter,
+    aggregate_approved_refusals_by_user,
+    count_season_approved_assignments,
+    count_users_season_approved_assignments,
+    enrich_judge_refusal_stats,
+    get_responsibility_label,
+)
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _get_current_season_start() -> date:
-    current_date = get_today()
-    if current_date.month >= 9:
-        return date(current_date.year, 9, 1)
-    return date(current_date.year - 1, 9, 1)
+def _resolve_season_bounds(season: Optional[str]) -> tuple[Optional[date], Optional[date], Optional[str]]:
+    season_key = normalize_season_param(season) if season else get_current_season_key()
+    if season == "all":
+        season_key = None
+    start, end = get_season_date_range(season_key)
+    return start, end, season_key
 
 
-def _get_current_season_end() -> date:
-    current_date = get_today()
-    if current_date.month >= 9:
-        return date(current_date.year + 1, 5, 31)
-    return date(current_date.year, 5, 31)
-
-
-def _get_responsibility_label(approved_refusal_pct: float) -> str:
-    if approved_refusal_pct <= 5:
-        return "Очень высокая"
-    if approved_refusal_pct <= 12:
-        return "Высокая"
-    if approved_refusal_pct <= 20:
-        return "Средняя"
-    if approved_refusal_pct <= 35:
-        return "Низкая"
-    return "Очень низкая"
+def _get_responsibility_label(refusal_pct: float) -> str:
+    return get_responsibility_label(refusal_pct)
 
 
 class BroadcastIn(BaseModel):
@@ -98,6 +100,7 @@ async def broadcast(
 def admin_list_registrations(
     month: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    season: Optional[str] = Query(None, description="Ключ сезона вида 2026-2027 или all"),
     future_only: bool = Query(True, description="Только будущие турниры"),
     search: Optional[str] = Query(None, description="Поиск по имени судьи или турниру"),
     admin: User = Depends(get_current_admin),
@@ -107,6 +110,9 @@ def admin_list_registrations(
     db = SessionLocal()
     try:
         q = db.query(Registration).join(Tournament).join(User, Registration.user_id == User.user_id)
+        season_start, season_end, _ = _resolve_season_bounds(season)
+        if season_start is not None and season_end is not None:
+            q = q.filter(Tournament.date.between(season_start, season_end))
         if month:
             q = q.filter(Tournament.month == month)
         if future_only:
@@ -147,82 +153,102 @@ def admin_list_registrations(
         db.close()
 
 
+@router.get("/seasons")
+def admin_list_seasons(admin: User = Depends(get_current_admin)):
+    return list_seasons()
+
+
 @router.get("/registrations/refusals-stats")
 def admin_registration_refusals_stats(
+    season: Optional[str] = Query(None, description="Ключ сезона вида 2026-2027 или all"),
     admin: User = Depends(get_current_admin),
 ):
     db = SessionLocal()
     try:
-        season_start = _get_current_season_start()
-        season_end = _get_current_season_end()
+        season_start, season_end, season_key = _resolve_season_bounds(season)
+        if season_start is None or season_end is None:
+            season_start = date.min
+            season_end = date.max
         season_end_exclusive = season_end + timedelta(days=1)
 
-        season_rows = (
-            db.query(RegistrationCancellation.previous_status, func.count(RegistrationCancellation.cancellation_id))
-            .filter(
-                and_(
-                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
-                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
-                )
-            )
-            .group_by(RegistrationCancellation.previous_status)
-            .all()
-        )
+        season_filter = season_cancellation_filter(season_start, season_end_exclusive)
+        approved_filter = and_(season_filter, approved_cancellation_filter())
 
-        season_total_refusals = sum(cnt for _, cnt in season_rows)
-        season_approved_refusals = next((cnt for status, cnt in season_rows if status == RegistrationStatus.APPROVED), 0)
-        season_approved_refusal_pct = round((season_approved_refusals / season_total_refusals) * 100, 1) if season_total_refusals > 0 else 0.0
-        responsibility_score = max(0, round(100 - season_approved_refusal_pct, 1))
+        season_refusals = (
+            db.query(func.count(RegistrationCancellation.cancellation_id))
+            .filter(approved_filter)
+            .scalar()
+            or 0
+        )
+        season_approved_assignments = count_season_approved_assignments(
+            db, season_start, season_end, season_filter
+        )
+        season_refusal_pct = (
+            round((season_refusals / season_approved_assignments) * 100, 1)
+            if season_approved_assignments > 0
+            else 0.0
+        )
+        responsibility_score = max(0, round(100 - season_refusal_pct, 1))
 
         month_rows = (
             db.query(
                 func.strftime('%Y-%m', RegistrationCancellation.cancelled_at).label('month_key'),
-                RegistrationCancellation.previous_status,
                 func.count(RegistrationCancellation.cancellation_id).label('cnt'),
             )
-            .filter(
-                and_(
-                    RegistrationCancellation.cancelled_at >= datetime.combine(season_start, datetime.min.time()),
-                    RegistrationCancellation.cancelled_at < datetime.combine(season_end_exclusive, datetime.min.time()),
-                )
-            )
-            .group_by('month_key', RegistrationCancellation.previous_status)
+            .filter(approved_filter)
+            .group_by('month_key')
             .all()
         )
 
-        month_stats: dict[str, dict[str, int]] = {}
-        for month_key, previous_status, cnt in month_rows:
-            if month_key not in month_stats:
-                month_stats[month_key] = {"total": 0, "approved": 0}
-            month_stats[month_key]["total"] += cnt
-            if previous_status == RegistrationStatus.APPROVED:
-                month_stats[month_key]["approved"] += cnt
+        judge_rows = (
+            db.query(
+                RegistrationCancellation.user_id,
+                User.first_name,
+                User.last_name,
+                func.count(RegistrationCancellation.cancellation_id).label('cnt'),
+            )
+            .join(User, User.user_id == RegistrationCancellation.user_id)
+            .filter(approved_filter)
+            .group_by(
+                RegistrationCancellation.user_id,
+                User.first_name,
+                User.last_name,
+            )
+            .all()
+        )
+        refusals_by_judge = aggregate_approved_refusals_by_user(judge_rows, with_names=True)
+        judge_user_ids = list(refusals_by_judge.keys())
+        judge_approved_assignments = count_users_season_approved_assignments(
+            db, judge_user_ids, season_start, season_end, season_filter
+        )
+        by_judge = enrich_judge_refusal_stats(refusals_by_judge, judge_approved_assignments)
 
         monthly = []
-        for month_key in sorted(month_stats.keys()):
-            total = month_stats[month_key]["total"]
-            approved = month_stats[month_key]["approved"]
+        for month_key, cnt in sorted(month_rows, key=lambda row: row[0]):
+            if cnt <= 0:
+                continue
             year, month = month_key.split('-')
             month_name = MONTH_NAMES_RU[int(month) - 1]
             monthly.append({
                 "month_key": month_key,
                 "month": f"{month_name} {year}",
-                "total_refusals": total,
-                "approved_refusals": approved,
-                "approved_refusal_pct": round((approved / total) * 100, 1) if total > 0 else 0.0,
+                "refusals": cnt,
             })
 
         return {
             "season": {
-                "start": season_start.strftime('%d.%m.%Y'),
-                "end": season_end.strftime('%d.%m.%Y'),
-                "total_refusals": season_total_refusals,
-                "approved_refusals": season_approved_refusals,
-                "approved_refusal_pct": season_approved_refusal_pct,
+                "key": season_key or "all",
+                "label": season_label(season_key),
+                "start": season_start.strftime('%d.%m.%Y') if season_key else "—",
+                "end": season_end.strftime('%d.%m.%Y') if season_key else "—",
+                "refusals": season_refusals,
+                "approved_assignments": season_approved_assignments,
+                "refusal_pct": season_refusal_pct,
                 "responsibility_score": responsibility_score,
-                "responsibility_label": _get_responsibility_label(season_approved_refusal_pct),
+                "responsibility_label": _get_responsibility_label(season_refusal_pct),
             },
             "monthly": monthly,
+            "by_judge": by_judge,
         }
     finally:
         db.close()
@@ -367,10 +393,12 @@ async def admin_reject_registration(
 @router.get("/users")
 def admin_list_users(
     search: Optional[str] = Query(None),
+    season: Optional[str] = Query(None, description="Ключ сезона вида 2026-2027 или all"),
     admin: User = Depends(get_current_admin),
 ):
     db = SessionLocal()
     try:
+        season_start, season_end, season_key = _resolve_season_bounds(season)
         users = db.query(User).order_by(User.last_name, User.first_name).all()
         if search and search.strip():
             users = filter_by_search(
@@ -383,24 +411,66 @@ def admin_list_users(
                 lambda u: getattr(u, "email", None) or "",
             )
         user_ids = [u.user_id for u in users]
-        stats_rows = (
+        stats_query = (
             db.query(Registration.user_id, Registration.status, func.count(Registration.registration_id).label("cnt"))
+            .join(Tournament, Tournament.tournament_id == Registration.tournament_id)
             .filter(Registration.user_id.in_(user_ids))
-            .group_by(Registration.user_id, Registration.status)
-            .all()
         )
+        if season_start is not None and season_end is not None:
+            stats_query = stats_query.filter(
+                Tournament.date >= season_start,
+                Tournament.date <= season_end,
+            )
+        stats_rows = stats_query.group_by(Registration.user_id, Registration.status).all()
         by_user: dict[int, dict[str, int]] = {}
         for uid in user_ids:
             by_user[uid] = {"approved": 0, "pending": 0, "rejected": 0}
         for user_id, status, cnt in stats_rows:
             if status in by_user.get(user_id, {}):
                 by_user[user_id][status] = cnt
+
+        refusal_start = season_start or date.min
+        refusal_end = season_end or date.max
+        season_end_exclusive = refusal_end + timedelta(days=1)
+        season_filter = season_cancellation_filter(refusal_start, season_end_exclusive)
+        cancellation_rows = []
+        if user_ids and season_key is not None:
+            cancellation_rows = (
+                db.query(
+                    RegistrationCancellation.user_id,
+                    func.count(RegistrationCancellation.cancellation_id).label("cnt"),
+                )
+                .filter(
+                    RegistrationCancellation.user_id.in_(user_ids),
+                    season_filter,
+                    approved_cancellation_filter(),
+                )
+                .group_by(RegistrationCancellation.user_id)
+                .all()
+            )
+        refusals_by_user = aggregate_approved_refusals_by_user(cancellation_rows)
+        season_approved_by_user = (
+            count_users_season_approved_assignments(
+                db, user_ids, refusal_start, refusal_end, season_filter
+            )
+            if season_key is not None
+            else {}
+        )
+
         result = []
         for u in users:
             s = by_user.get(u.user_id, {"approved": 0, "pending": 0, "rejected": 0})
             total = s["approved"] + s["pending"] + s["rejected"]
             approved_pct = round((s["approved"] / total * 100), 1) if total > 0 else 0
             rejected_pct = round((s["rejected"] / total * 100), 1) if total > 0 else 0
+            ref = refusals_by_user.get(u.user_id, {"refusals": 0})
+            season_refusals = ref["refusals"]
+            season_approved_assignments = season_approved_by_user.get(u.user_id, 0)
+            season_refusal_pct = (
+                round((season_refusals / season_approved_assignments) * 100, 1)
+                if season_approved_assignments > 0
+                else 0.0
+            )
             result.append({
                 "user_id": u.user_id,
                 "first_name": u.first_name,
@@ -415,6 +485,11 @@ def admin_list_users(
                 "regs_total": total,
                 "approved_pct": approved_pct,
                 "rejected_pct": rejected_pct,
+                "season_refusals": season_refusals,
+                "season_approved_assignments": season_approved_assignments,
+                "season_refusal_pct": season_refusal_pct,
+                "season_key": season_key or "all",
+                "season_label": season_label(season_key),
             })
         return result
     finally:

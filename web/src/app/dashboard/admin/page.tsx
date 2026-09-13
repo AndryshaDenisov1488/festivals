@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { Send, DollarSign, FileSpreadsheet, ClipboardList, Check, X, Users, Trophy, PlusCircle, Pencil, Trash2, ChevronDown, ChevronRight, Wallet, Mail } from 'lucide-react'
 import MonthFilter, { type MonthFilterValue } from '@/components/MonthFilter'
+import SeasonFilter from '@/components/SeasonFilter'
 
 type Budget = {
   tournament_id: number
@@ -40,6 +41,9 @@ type AdminUser = {
   regs_total?: number
   approved_pct?: number
   rejected_pct?: number
+  season_refusals?: number
+  season_approved_assignments?: number
+  season_refusal_pct?: number
 }
 
 type AdminTournament = {
@@ -52,24 +56,41 @@ type AdminTournament = {
 type RefusalsMonthlyStat = {
   month_key: string
   month: string
-  total_refusals: number
-  approved_refusals: number
-  approved_refusal_pct: number
+  refusals: number
 }
 
 type RefusalsSeasonStat = {
+  key?: string
+  label?: string
   start: string
   end: string
-  total_refusals: number
-  approved_refusals: number
-  approved_refusal_pct: number
+  refusals: number
+  approved_assignments: number
+  refusal_pct: number
   responsibility_score: number
   responsibility_label: string
+}
+
+type SeasonOption = {
+  key: string
+  label: string
+  start?: string | null
+  end?: string | null
+  is_current?: boolean
+}
+
+type RefusalsJudgeStat = {
+  user_id: number
+  user_name: string
+  refusals: number
+  approved_assignments: number
+  refusal_pct: number
 }
 
 type RefusalsStatsResponse = {
   season: RefusalsSeasonStat
   monthly: RefusalsMonthlyStat[]
+  by_judge?: RefusalsJudgeStat[]
 }
 
 export default function AdminPage() {
@@ -98,7 +119,10 @@ export default function AdminPage() {
 
   const [exportMonth, setExportMonth] = useState('')
   const [exportYear, setExportYear] = useState('')
+  const [exportSeason, setExportSeason] = useState('')
   const [exportLoading, setExportLoading] = useState(false)
+  const [seasonOptions, setSeasonOptions] = useState<SeasonOption[]>([])
+  const [statsSeason, setStatsSeason] = useState('')
 
   type JudgeEarnings = {
     user_id: number
@@ -203,14 +227,31 @@ export default function AdminPage() {
     else if (regsMonthFilter === 'all') params.set('future_only', 'false')
     else params.set('month', regsMonthFilter)
     if (regsSearch.trim()) params.set('search', regsSearch.trim())
+    if (statsSeason) params.set('season', statsSeason)
     api<AdminRegistration[]>(`/api/v1/admin/registrations?${params}`, { token })
       .then(setRegistrations)
       .catch(() => setRegistrations([]))
       .finally(() => setRegsLoading(false))
 
-    api<RefusalsStatsResponse>('/api/v1/admin/registrations/refusals-stats', { token })
+    api<RefusalsStatsResponse>(`/api/v1/admin/registrations/refusals-stats?season=${encodeURIComponent(statsSeason)}`, { token })
       .then(setRefusalsStats)
       .catch(() => setRefusalsStats(null))
+  }
+
+  const loadSeasons = () => {
+    if (!token) return
+    api<SeasonOption[]>('/api/v1/admin/seasons', { token })
+      .then((items) => {
+        if (items?.length) {
+          setSeasonOptions(items)
+          const current = items.find((s) => s.is_current)
+          if (current) {
+            setStatsSeason((prev) => prev || current.key)
+            setExportSeason((prev) => prev || current.key)
+          }
+        }
+      })
+      .catch(() => {})
   }
 
   const loadUsers = () => {
@@ -218,6 +259,7 @@ export default function AdminPage() {
     setUsersLoading(true)
     const params = new URLSearchParams()
     if (usersSearch.trim()) params.set('search', usersSearch.trim())
+    params.set('season', statsSeason)
     api<AdminUser[]>(`/api/v1/admin/users?${params}`, { token })
       .then(setUsers)
       .catch(() => setUsers([]))
@@ -253,14 +295,18 @@ export default function AdminPage() {
   }, [token, budgetsMonthFilter])
 
   useEffect(() => {
+    loadSeasons()
+  }, [token])
+
+  useEffect(() => {
     const id = setTimeout(loadRegistrations, regsSearch ? 200 : 0)
     return () => clearTimeout(id)
-  }, [token, regsFilter, regsMonthFilter, regsSearch])
+  }, [token, regsFilter, regsMonthFilter, regsSearch, statsSeason])
 
   useEffect(() => {
     const id = setTimeout(loadUsers, usersSearch ? 200 : 0)
     return () => clearTimeout(id)
-  }, [token, usersSearch])
+  }, [token, usersSearch, statsSeason])
 
   useEffect(() => {
     const id = setTimeout(loadTournaments, tournamentsSearch ? 200 : 0)
@@ -363,27 +409,39 @@ export default function AdminPage() {
     }
   }
 
-  const handleExportMonth = async () => {
-    if (!exportMonth || !token) return
+  const selectedSeasonLabel = seasonOptions.find((s) => s.key === statsSeason)?.label ?? statsSeason
+
+  const downloadExport = async (url: string, filename: string, successMessage: string) => {
+    if (!token) return
     setExportLoading(true)
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/v1/admin/exports/month?month=${encodeURIComponent(exportMonth)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      if (!res.ok) throw new Error('Ошибка экспорта')
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) {
+        const detail = await res.text()
+        throw new Error(detail || 'Ошибка экспорта')
+      }
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `export_${exportMonth}.xlsx`
+      a.download = filename
       a.click()
       URL.revokeObjectURL(a.href)
-      showSuccess('Экспорт за месяц скачан')
+      showSuccess(successMessage)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ошибка')
     } finally {
       setExportLoading(false)
     }
+  }
+
+  const handleExportMonth = async () => {
+    if (!exportMonth || !token) return
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'
+    await downloadExport(
+      `${apiUrl}/api/v1/admin/exports/month?month=${encodeURIComponent(exportMonth)}`,
+      `export_${exportMonth}.xlsx`,
+      'Экспорт за месяц скачан'
+    )
   }
 
   const handleSaveUser = async () => {
@@ -501,25 +559,32 @@ export default function AdminPage() {
 
   const handleExportYear = async () => {
     if (!exportYear || !token) return
-    setExportLoading(true)
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/v1/admin/exports/year?year=${encodeURIComponent(exportYear)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      if (!res.ok) throw new Error('Ошибка экспорта')
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `export_${exportYear}.xlsx`
-      a.click()
-      URL.revokeObjectURL(a.href)
-      showSuccess('Экспорт за год скачан')
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка')
-    } finally {
-      setExportLoading(false)
-    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'
+    await downloadExport(
+      `${apiUrl}/api/v1/admin/exports/year?year=${encodeURIComponent(exportYear)}`,
+      `export_${exportYear}.xlsx`,
+      'Экспорт за год скачан'
+    )
+  }
+
+  const handleExportSeason = async () => {
+    if (!exportSeason || !token) return
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'
+    await downloadExport(
+      `${apiUrl}/api/v1/admin/exports/season?season_key=${encodeURIComponent(exportSeason)}`,
+      `export_season_${exportSeason}.xlsx`,
+      'Экспорт за сезон скачан'
+    )
+  }
+
+  const handleExportAll = async () => {
+    if (!token) return
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'
+    await downloadExport(
+      `${apiUrl}/api/v1/admin/exports/all`,
+      'export_all_seasons.xlsx',
+      'Экспорт за все сезоны скачан'
+    )
   }
 
   return (
@@ -714,14 +779,20 @@ export default function AdminPage() {
             <Users className="h-5 w-5" />
             Пользователи
           </h2>
-          <input
-            type="search"
-            placeholder="Поиск: имя, фамилия, функция, email..."
-            value={usersSearch}
-            onChange={(e) => setUsersSearch(e.target.value)}
-            className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
-          />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <SeasonFilter value={statsSeason} onChange={setStatsSeason} seasons={seasonOptions} />
+            <input
+              type="search"
+              placeholder="Поиск: имя, фамилия, функция, email..."
+              value={usersSearch}
+              onChange={(e) => setUsersSearch(e.target.value)}
+              className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-800 sm:w-64"
+            />
+          </div>
         </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Статистика заявок за сезон: <strong>{selectedSeasonLabel}</strong>
+        </p>
         {usersLoading ? (
           <div className="py-4 text-center text-slate-500">Загрузка...</div>
         ) : (
@@ -733,7 +804,8 @@ export default function AdminPage() {
                   <th className="px-2 py-2 text-left">Функция</th>
                   <th className="px-2 py-2 text-left">Категория</th>
                   <th className="px-2 py-2 text-left">Email</th>
-                  <th className="px-2 py-2 text-left">Заявки</th>
+                  <th className="px-2 py-2 text-left" title={`Заявки за сезон ${selectedSeasonLabel}`}>Заявки</th>
+                  <th className="px-2 py-2 text-left" title={`Отмены после одобрения за сезон ${selectedSeasonLabel}`}>Отказы после ✓</th>
                   <th className="px-2 py-2 text-left">Статус</th>
                   <th className="px-2 py-2 text-right">Действия</th>
                 </tr>
@@ -755,6 +827,18 @@ export default function AdminPage() {
                           <span className="text-red-600 font-medium">{u.regs_rejected ?? 0}</span>
                           <span className="ml-1 text-xs text-slate-500">
                             ({u.approved_pct ?? 0}% ✓ · {u.rejected_pct ?? 0}% ✕)
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-slate-700">
+                      {(u.season_refusals ?? 0) > 0 ? (
+                        <span>
+                          <span className="font-medium text-rose-700">{u.season_refusals}</span>
+                          <span className="ml-1 text-xs text-slate-500">
+                            ({u.season_refusal_pct ?? 0}% из {u.season_approved_assignments ?? 0})
                           </span>
                         </span>
                       ) : (
@@ -1146,24 +1230,35 @@ export default function AdminPage() {
         </div>
         {refusalsStats?.season && (
           <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50/40 p-4">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-rose-800">
-              Ответственность судей по отказам
-            </h3>
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-rose-800">
+                Отказы после одобрения
+              </h3>
+              <SeasonFilter value={statsSeason} onChange={setStatsSeason} seasons={seasonOptions} />
+            </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
                 <p className="text-xs text-slate-500">Сезон</p>
                 <p className="text-sm font-medium text-slate-800">
-                  {refusalsStats.season.start} - {refusalsStats.season.end}
+                  {refusalsStats.season.label || selectedSeasonLabel}
+                  {refusalsStats.season.start !== '—' && (
+                    <span className="block text-xs text-slate-500">
+                      {refusalsStats.season.start} - {refusalsStats.season.end}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
-                <p className="text-xs text-slate-500">Всего отказов</p>
-                <p className="text-lg font-semibold text-slate-800">{refusalsStats.season.total_refusals}</p>
+                <p className="text-xs text-slate-500">Отказов после одобрения</p>
+                <p className="text-lg font-semibold text-rose-700">{refusalsStats.season.refusals}</p>
               </div>
               <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
-                <p className="text-xs text-slate-500">Отказы при одобрении</p>
-                <p className="text-lg font-semibold text-rose-700">
-                  {refusalsStats.season.approved_refusals} ({refusalsStats.season.approved_refusal_pct}%)
+                <p className="text-xs text-slate-500">Доля от всех одобрений</p>
+                <p className="text-lg font-semibold text-slate-800">
+                  {refusalsStats.season.refusal_pct}%
+                </p>
+                <p className="text-xs text-slate-500">
+                  из {refusalsStats.season.approved_assignments} одобрений
                 </p>
               </div>
               <div className="rounded-lg border border-rose-200 bg-white px-3 py-2">
@@ -1175,22 +1270,44 @@ export default function AdminPage() {
             </div>
             {refusalsStats.monthly.length > 0 && (
               <div className="mt-4 overflow-x-auto">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-rose-700">По месяцам</p>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-rose-200">
                       <th className="px-2 py-2 text-left">Месяц</th>
-                      <th className="px-2 py-2 text-right">Все отказы</th>
-                      <th className="px-2 py-2 text-right">При одобрении</th>
-                      <th className="px-2 py-2 text-right">% при одобрении</th>
+                      <th className="px-2 py-2 text-right">Отказов после одобрения</th>
                     </tr>
                   </thead>
                   <tbody>
                     {refusalsStats.monthly.map((row) => (
                       <tr key={row.month_key} className="border-b border-rose-100 last:border-b-0">
                         <td className="px-2 py-2 text-slate-700">{row.month}</td>
-                        <td className="px-2 py-2 text-right text-slate-700">{row.total_refusals}</td>
-                        <td className="px-2 py-2 text-right text-rose-700">{row.approved_refusals}</td>
-                        <td className="px-2 py-2 text-right text-slate-700">{row.approved_refusal_pct}%</td>
+                        <td className="px-2 py-2 text-right text-rose-700">{row.refusals}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {(refusalsStats.by_judge?.length ?? 0) > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-rose-700">По судьям</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-rose-200">
+                      <th className="px-2 py-2 text-left">Судья</th>
+                      <th className="px-2 py-2 text-right">Отказов</th>
+                      <th className="px-2 py-2 text-right">Одобрено за сезон</th>
+                      <th className="px-2 py-2 text-right">% от одобренных</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refusalsStats.by_judge!.map((row) => (
+                      <tr key={row.user_id} className="border-b border-rose-100 last:border-b-0">
+                        <td className="px-2 py-2 text-slate-700">{row.user_name}</td>
+                        <td className="px-2 py-2 text-right text-rose-700">{row.refusals}</td>
+                        <td className="px-2 py-2 text-right text-slate-700">{row.approved_assignments}</td>
+                        <td className="px-2 py-2 text-right text-slate-700">{row.refusal_pct}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1295,7 +1412,25 @@ export default function AdminPage() {
           <FileSpreadsheet className="h-5 w-5" />
           Экспорт в Excel
         </h2>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeasonFilter value={exportSeason} onChange={setExportSeason} seasons={seasonOptions} />
+            <button
+              onClick={handleExportSeason}
+              disabled={!exportSeason || exportLoading}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {exportLoading ? '...' : 'Экспорт за сезон'}
+            </button>
+            <button
+              onClick={handleExportAll}
+              disabled={exportLoading}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {exportLoading ? '...' : 'Экспорт за все сезоны'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -1327,6 +1462,7 @@ export default function AdminPage() {
             >
               {exportLoading ? '...' : 'Экспорт по году'}
             </button>
+          </div>
           </div>
         </div>
       </section>

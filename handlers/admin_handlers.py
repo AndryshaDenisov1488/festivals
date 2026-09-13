@@ -21,6 +21,7 @@ from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from utils.text_utils import is_affirmative_answer
 from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month
+from utils.season import get_current_season_key, get_season_date_range
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 logger = logging.getLogger(__name__)
@@ -643,7 +644,7 @@ async def export_data_step(callback_query: types.CallbackQuery):
     kb.add(
         InlineKeyboardButton("📅 За месяц", callback_data='export_period_month'),
         InlineKeyboardButton("📆 За год", callback_data='export_period_year'),
-        InlineKeyboardButton("🎓 За сезон (сентябрь–июнь)", callback_data='export_period_season'),
+        InlineKeyboardButton("🎓 За сезон (июль–июнь)", callback_data='export_period_season'),
         InlineKeyboardButton("🗓️ За всё время", callback_data='export_period_all'),
         InlineKeyboardButton("⬅️ Назад", callback_data='admin_menu'),
     )
@@ -1167,16 +1168,7 @@ async def admin_earnings_seasonal(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         from sqlalchemy import func, and_
-        from datetime import date
-        
-        # Определяем текущий сезон
-        current_date = date.today()
-        if current_date.month >= 9:  # Сентябрь и позже
-            season_start = date(current_date.year, 9, 1)
-            season_end = date(current_date.year + 1, 5, 31)
-        else:  # До сентября
-            season_start = date(current_date.year - 1, 9, 1)
-            season_end = date(current_date.year, 5, 31)
+        season_start, season_end = get_season_date_range(get_current_season_key())
         
         # Получаем заработок судей за сезон
         earnings = session.query(

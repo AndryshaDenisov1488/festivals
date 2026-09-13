@@ -11,9 +11,9 @@ RUSSIAN_MONTHS = (
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
 )
 
-# Сезон фигурного катания: август → июнь (июль обычно без турниров)
+# Сезон фигурного катания: июль → июнь
 SEASON_MONTHS = (
-    "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+    "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
 )
 
@@ -28,17 +28,15 @@ def get_today() -> date:
 
 
 def month_sort_key(month: str) -> int:
-    """Ключ сортировки: август → … → июнь; июль и неизвестные — в конец."""
+    """Ключ сортировки: июль → … → июнь; неизвестные — в конец."""
     try:
         return SEASON_MONTHS.index(month)
     except ValueError:
-        if month == "Июль":
-            return len(SEASON_MONTHS)
-        return len(SEASON_MONTHS) + 1
+        return len(SEASON_MONTHS)
 
 
 def sort_month_names(months: Iterable[str]) -> List[str]:
-    """Сортирует месяцы в порядке сезона: август → июнь."""
+    """Сортирует месяцы в порядке сезона: июль → июнь."""
     return sorted(months, key=month_sort_key)
 
 
@@ -50,11 +48,11 @@ def month_name_to_year_month(month_name: str, ref: date | None = None) -> tuple[
         return today.year, today.month
 
     year = today.year
-    if month_num >= 8:
-        if today.month < 8:
+    if month_num >= 7:
+        if today.month < 7:
             year -= 1
     elif month_num <= 6:
-        if today.month >= 8:
+        if today.month >= 7:
             year += 1
     return year, month_num
 

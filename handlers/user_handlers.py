@@ -9,7 +9,8 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import and_
 import sqlite3
 from database import SessionLocal
-from models import User, Tournament, Registration, RegistrationStatus
+from models import User, Tournament, Registration, RegistrationStatus, JudgePayment
+from utils.registration_cancellation import record_registration_cancellation
 from states import EditProfile, MyRegistrations, CorrectEarnings, LinkEmail
 from config import CHANNEL_ID, MAX_MESSAGE_LENGTH, MAX_JUDGES_PER_TOURNAMENT, WEB_PORTAL_URL, ADMIN_EMAIL
 from keyboards import main_menu
@@ -18,6 +19,7 @@ from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from utils.text_utils import is_affirmative_answer
 from utils.date_utils import sort_month_names, sort_by_tournament_date
+from utils.season import get_current_season_key, get_season_date_range
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 # Разрешаем буквы RU/EN + дефис, длина 2..30
@@ -337,7 +339,10 @@ async def process_sign_up(callback_query: types.CallbackQuery):
     """
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_season_date_range(get_current_season_key())
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для записи.")
@@ -362,7 +367,11 @@ async def process_month(callback_query: types.CallbackQuery):
     selected_month = callback_query.data.split('_', 1)[1]
     session = SessionLocal()
     try:
-        tournaments = session.query(Tournament).filter(Tournament.month == selected_month).order_by(Tournament.date).all()
+        season_start, season_end = get_season_date_range(get_current_season_key())
+        tournaments = session.query(Tournament).filter(
+            Tournament.month == selected_month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
         if tournaments:
             keyboard = InlineKeyboardMarkup(row_width=1)
             for tournament in tournaments:
@@ -659,8 +668,10 @@ async def process_cancel_registration(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
+        season_start, season_end = get_season_date_range(get_current_season_key())
         months_raw = session.query(Tournament.month).join(Registration).filter(
-            Registration.user_id == user_id
+            Registration.user_id == user_id,
+            Tournament.date.between(season_start, season_end),
         ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
 
@@ -687,10 +698,12 @@ async def process_cancel_reg_month(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
+        season_start, season_end = get_season_date_range(get_current_season_key())
         registrations = sort_by_tournament_date(
             session.query(Registration).join(Tournament).filter(
                 Registration.user_id == user_id,
-                Tournament.month == selected_month
+                Tournament.month == selected_month,
+                Tournament.date.between(season_start, season_end),
             ).all()
         )
 
@@ -758,12 +771,17 @@ async def process_confirm_cancel(callback_query: types.CallbackQuery):
             await callback_query.message.answer("❌ Запись не найдена.")
             return
 
+        if registration.user_id != callback_query.from_user.id:
+            await callback_query.answer("Нельзя отменить чужую запись.", show_alert=True)
+            return
+
         user = registration.user
         t = registration.tournament
         old_status = registration.status
-        
-        # Удаляем запись об оплате, если она существует
-        from models import JudgePayment
+
+        record_registration_cancellation(session, registration)
+        session.flush()
+
         payment = session.query(JudgePayment).filter(
             JudgePayment.user_id == user.user_id,
             JudgePayment.tournament_id == t.tournament_id
@@ -775,7 +793,10 @@ async def process_confirm_cancel(callback_query: types.CallbackQuery):
         session.delete(registration)
         session.commit()
 
-        logger.info(f"{user.first_name} {user.last_name} (ID: {user.user_id}) отменил запись на турнир ID: {t.tournament_id}")
+        logger.info(
+            f"{user.first_name} {user.last_name} (ID: {user.user_id}) отменил запись на турнир ID: {t.tournament_id} "
+            f"(previous_status={old_status}, cancellation logged)"
+        )
 
         await callback_query.message.answer(
             f"✅ Ваша запись на турнир <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> отменена.",
@@ -821,8 +842,10 @@ async def process_cancel_action(callback_query: types.CallbackQuery, state: FSMC
 async def my_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
+        season_start, season_end = get_season_date_range(get_current_season_key())
         months_raw = session.query(Tournament.month).join(Registration).filter(
-            Registration.user_id == callback_query.from_user.id
+            Registration.user_id == callback_query.from_user.id,
+            Tournament.date.between(season_start, season_end),
         ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
@@ -846,10 +869,12 @@ async def process_my_registrations_month(callback_query: types.CallbackQuery, st
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
+        season_start, season_end = get_season_date_range(get_current_season_key())
         regs = sort_by_tournament_date(
             session.query(Registration).join(Tournament).filter(
                 Registration.user_id == callback_query.from_user.id,
-                Tournament.month == selected_month
+                Tournament.month == selected_month,
+                Tournament.date.between(season_start, season_end),
             ).all()
         )
         if not regs:

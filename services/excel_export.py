@@ -12,6 +12,7 @@ from config import MAX_MESSAGE_LENGTH
 from models import RegistrationStatus
 from database import SessionLocal
 from sqlalchemy.exc import SQLAlchemyError
+from utils.season import get_current_season_key, get_season_date_range
 
 logger = logging.getLogger(__name__)
 
@@ -39,14 +40,9 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
             end   = datetime(year,12,31).date()
             query = query.filter(Tournament.date.between(start, end))
         elif period == 'season':
-            today = datetime.now().date()
-            if today.month >= 9:
-                sy, ey = today.year, today.year + 1
-            else:
-                sy, ey = today.year - 1, today.year
-            start_date = datetime(sy,9,1).date()
-            end_date = datetime(ey,5,31).date()
-            logger.info(f"Экспорт за сезон {sy}-{ey}: {start_date} - {end_date}")
+            season_key = get_current_season_key()
+            start_date, end_date = get_season_date_range(season_key)
+            logger.info(f"Экспорт за сезон {season_key}: {start_date} - {end_date}")
             query = query.filter(
                 Tournament.date.between(start_date, end_date)
             )
@@ -265,13 +261,7 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
             end = datetime(year, 12, 31).date()
             earnings_query = earnings_query.filter(Tournament.date.between(start, end))
         elif period == 'season':
-            today = datetime.now().date()
-            if today.month >= 9:
-                sy, ey = today.year, today.year + 1
-            else:
-                sy, ey = today.year - 1, today.year
-            start_date = datetime(sy, 9, 1).date()
-            end_date = datetime(ey, 5, 31).date()
+            start_date, end_date = get_season_date_range(get_current_season_key())
             earnings_query = earnings_query.filter(Tournament.date.between(start_date, end_date))
         
         earnings_data = earnings_query.group_by(User.user_id).all()

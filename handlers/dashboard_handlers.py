@@ -116,12 +116,11 @@ def _format_dashboard_message(data: dict) -> str:
     message += f"   • Записей за месяц: {activity.get('registrations_month', 0)}\n"
     message += f"   • Популярный день: {activity.get('popular_day', '—')}\n\n"
 
-    # Отказы судей
+    # Отказы судей после одобрения
     refusals = data.get('refusals', {})
-    message += f"🚫 <b>ОТКАЗЫ СУДЕЙ:</b>\n"
-    message += f"   • Отказов за сезон: {refusals.get('season_total_refusals', 0)}\n"
-    message += f"   • Из них при одобрении: {refusals.get('season_approved_refusals', 0)}\n"
-    message += f"   • Процент при одобрении: {refusals.get('season_approved_refusal_pct', 0)}%\n"
+    message += f"🚫 <b>ОТКАЗЫ ПОСЛЕ ОДОБРЕНИЯ:</b>\n"
+    message += f"   • Отказов за сезон: {refusals.get('season_refusals', 0)}\n"
+    message += f"   • Доля от всех одобрений: {refusals.get('season_refusal_pct', 0)}%\n"
     message += f"   • Ответственность судей: {refusals.get('responsibility_label', '—')} ({refusals.get('responsibility_score', 0)} / 100)\n\n"
     
     # Топ судей
@@ -254,19 +253,16 @@ def _format_detailed_stats_message(data: dict) -> str:
 
     refusals = data.get('refusals', {})
     monthly_refusals = refusals.get('monthly', [])
-    message += f"🚫 <b>ОТКАЗЫ СУДЕЙ (СЕЗОН):</b>\n"
-    message += f"   • Всего отказов: {refusals.get('season_total_refusals', 0)}\n"
-    message += f"   • Отказов при одобрении: {refusals.get('season_approved_refusals', 0)}\n"
-    message += f"   • Доля отказов при одобрении: {refusals.get('season_approved_refusal_pct', 0)}%\n"
+    message += f"🚫 <b>ОТКАЗЫ ПОСЛЕ ОДОБРЕНИЯ (СЕЗОН):</b>\n"
+    message += f"   • Отказов: {refusals.get('season_refusals', 0)}\n"
+    message += f"   • Доля от всех одобрений: {refusals.get('season_refusal_pct', 0)}%\n"
     message += f"   • Ответственность судей: {refusals.get('responsibility_label', '—')} ({refusals.get('responsibility_score', 0)} / 100)\n"
     if monthly_refusals:
         message += "   • По месяцам:\n"
         for month_item in monthly_refusals[:6]:
             message += (
                 f"      - {month_item.get('month', '—')}: "
-                f"{month_item.get('total_refusals', 0)} отказов, "
-                f"{month_item.get('approved_refusals', 0)} при одобрении "
-                f"({month_item.get('approved_refusal_pct', 0)}%)\n"
+                f"{month_item.get('refusals', 0)} отказов\n"
             )
     message += "\n"
     

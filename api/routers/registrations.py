@@ -6,11 +6,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
-from models import Registration, Tournament, User, RegistrationCancellation
+from models import Registration, Tournament, User
+from utils.registration_cancellation import record_registration_cancellation
 from models import RegistrationStatus
 from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
 from api.dependencies import get_current_user, get_db
 from api.utils import format_date, filter_by_search
+from utils.season import get_current_season_key, get_season_date_range, normalize_season_param
 
 
 router = APIRouter()
@@ -24,6 +26,7 @@ class RegistrationCreateIn(BaseModel):
 def my_registrations(
     month: Optional[str] = None,
     status: Optional[str] = None,
+    season: Optional[str] = None,
     future_only: bool = True,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -34,6 +37,12 @@ def my_registrations(
     q = db.query(Registration).join(Tournament, Registration.tournament_id == Tournament.tournament_id).filter(
         Registration.user_id == user.user_id
     )
+    season_key = normalize_season_param(season) if season else get_current_season_key()
+    if season == "all":
+        season_key = None
+    season_start, season_end = get_season_date_range(season_key)
+    if season_start is not None and season_end is not None:
+        q = q.filter(Tournament.date.between(season_start, season_end))
     if month:
         q = q.filter(Tournament.month == month)
     if future_only:
@@ -187,13 +196,7 @@ async def cancel_registration(
     }
     previous_status = status_i18n.get(reg.status, reg.status)
 
-    cancellation = RegistrationCancellation(
-        registration_id=reg.registration_id,
-        user_id=user.user_id,
-        tournament_id=reg.tournament_id,
-        previous_status=reg.status,
-    )
-    db.add(cancellation)
+    record_registration_cancellation(db, reg)
 
     db.query(JudgePayment).filter(
         JudgePayment.user_id == user.user_id,
