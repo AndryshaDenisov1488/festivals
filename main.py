@@ -7,6 +7,8 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.handler import CancelHandler
+from aiogram.dispatcher.middlewares import BaseMiddleware
 
 from config import BOT_TOKEN
 from database import engine, SessionLocal
@@ -97,6 +99,32 @@ Base.metadata.create_all(bind=engine)
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+
+
+class BlockedUserMiddleware(BaseMiddleware):
+    """Не даёт заблокированным судьям пользоваться Telegram-ботом."""
+
+    @staticmethod
+    def is_blocked(user_id: int) -> bool:
+        session = SessionLocal()
+        try:
+            user = session.query(User.is_blocked).filter(User.user_id == user_id).first()
+            return bool(user and user.is_blocked)
+        finally:
+            session.close()
+
+    async def on_process_message(self, message: types.Message, data: dict):
+        if message.from_user and self.is_blocked(message.from_user.id):
+            await message.answer("Ваш доступ к боту ограничен. Обратитесь к администратору.")
+            raise CancelHandler()
+
+    async def on_process_callback_query(self, callback_query: types.CallbackQuery, data: dict):
+        if callback_query.from_user and self.is_blocked(callback_query.from_user.id):
+            await callback_query.answer("Доступ к боту ограничен.", show_alert=True)
+            raise CancelHandler()
+
+
+dp.middleware.setup(BlockedUserMiddleware())
 
 # ========== Планировщик ==========
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
