@@ -21,7 +21,11 @@ from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from utils.text_utils import is_affirmative_answer
 from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month
-from utils.season import get_current_season_key, get_season_date_range
+from utils.season import (
+    get_active_tournament_date_range,
+    get_current_season_key,
+    get_season_date_range,
+)
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 logger = logging.getLogger(__name__)
@@ -410,7 +414,10 @@ async def view_referees(callback_query: types.CallbackQuery):
 async def view_tournaments(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет созданных турниров.")
@@ -434,7 +441,11 @@ async def process_view_tournaments_month(callback_query: types.CallbackQuery):
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        tournaments = session.query(Tournament).filter(Tournament.month == selected_month).order_by(Tournament.date).all()
+        season_start, season_end = get_active_tournament_date_range()
+        tournaments = session.query(Tournament).filter(
+            Tournament.month == selected_month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
         if not tournaments:
             await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
             return
@@ -456,7 +467,10 @@ async def process_view_tournaments_month(callback_query: types.CallbackQuery):
 async def edit_tournament_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров для изменения.")
@@ -479,7 +493,11 @@ async def process_edit_tournament_month(callback_query: types.CallbackQuery, sta
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        tournaments = session.query(Tournament).filter(Tournament.month == selected_month).order_by(Tournament.date).all()
+        season_start, season_end = get_active_tournament_date_range()
+        tournaments = session.query(Tournament).filter(
+            Tournament.month == selected_month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
         if tournaments:
             kb = InlineKeyboardMarkup(row_width=1)
             for tour in tournaments:
@@ -579,7 +597,10 @@ async def process_edit_tournament_new_name(message: types.Message, state: FSMCon
 async def check_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
@@ -604,7 +625,11 @@ async def process_check_registrations_month(callback_query: types.CallbackQuery,
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        tournaments = session.query(Tournament).filter(Tournament.month == selected_month).order_by(Tournament.date).all()
+        season_start, season_end = get_active_tournament_date_range()
+        tournaments = session.query(Tournament).filter(
+            Tournament.month == selected_month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
         if not tournaments:
             await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
             await state.finish()
@@ -673,7 +698,10 @@ async def process_export_period(callback_query: types.CallbackQuery):
 async def select_month_for_export(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
     finally:
         session.close()
@@ -935,7 +963,11 @@ async def admin_review_tournaments_in_month(callback_query: types.CallbackQuery)
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        tournaments = session.query(Tournament).filter(Tournament.month == selected_month).order_by(Tournament.date).all()
+        season_start, season_end = get_active_tournament_date_range()
+        tournaments = session.query(Tournament).filter(
+            Tournament.month == selected_month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
         if not tournaments:
             await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
             return

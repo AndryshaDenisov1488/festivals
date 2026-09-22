@@ -18,6 +18,21 @@ def get_current_season_key(ref: Optional[date] = None) -> str:
     return f"{start_year}-{start_year + 1}"
 
 
+def get_active_tournament_date_range(ref: Optional[date] = None) -> tuple[date, date]:
+    """Диапазон турниров, доступных в текущем сезоне.
+
+    Для переходного сезона 2026–2027 показываем события начиная с августа:
+    июльские и более старые записи остаются в архиве и статистике.
+    """
+    current = ref or get_today()
+    start, end = season_bounds_from_start_year(
+        int(get_current_season_key(current).split("-")[0])
+    )
+    if start.year == 2026:
+        start = date(2026, 8, 1)
+    return start, end
+
+
 def normalize_season_param(season: Optional[str]) -> Optional[str]:
     """None / 'all' — без фильтра; иначе ключ сезона или текущий сезон."""
     if not season or season == "all":

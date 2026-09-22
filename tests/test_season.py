@@ -2,6 +2,7 @@ from datetime import date
 
 from utils.date_utils import month_name_to_year_month, sort_month_names
 from utils.season import (
+    get_active_tournament_date_range,
     get_current_season_key,
     get_season_date_range,
     list_seasons,
@@ -20,6 +21,13 @@ def test_season_bounds_are_july_through_june():
 def test_current_season_changes_on_july_first():
     assert get_current_season_key(date(2026, 6, 30)) == "2025-2026"
     assert get_current_season_key(date(2026, 7, 1)) == "2026-2027"
+
+
+def test_transition_season_hides_july_tournaments():
+    assert get_active_tournament_date_range(date(2026, 9, 22)) == (
+        date(2026, 8, 1),
+        date(2027, 6, 30),
+    )
 
 
 def test_arbitrary_valid_season_key_is_preserved():

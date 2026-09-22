@@ -19,7 +19,7 @@ from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from utils.text_utils import is_affirmative_answer
 from utils.date_utils import sort_month_names, sort_by_tournament_date
-from utils.season import get_current_season_key, get_season_date_range
+from utils.season import get_active_tournament_date_range
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
 # Разрешаем буквы RU/EN + дефис, длина 2..30
@@ -339,7 +339,7 @@ async def process_sign_up(callback_query: types.CallbackQuery):
     """
     session = SessionLocal()
     try:
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         months_raw = session.query(Tournament.month).filter(
             Tournament.date.between(season_start, season_end)
         ).distinct().all()
@@ -367,7 +367,7 @@ async def process_month(callback_query: types.CallbackQuery):
     selected_month = callback_query.data.split('_', 1)[1]
     session = SessionLocal()
     try:
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         tournaments = session.query(Tournament).filter(
             Tournament.month == selected_month,
             Tournament.date.between(season_start, season_end),
@@ -668,7 +668,7 @@ async def process_cancel_registration(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == user_id,
             Tournament.date.between(season_start, season_end),
@@ -698,7 +698,7 @@ async def process_cancel_reg_month(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         registrations = sort_by_tournament_date(
             session.query(Registration).join(Tournament).filter(
                 Registration.user_id == user_id,
@@ -842,7 +842,7 @@ async def process_cancel_action(callback_query: types.CallbackQuery, state: FSMC
 async def my_registrations_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         months_raw = session.query(Tournament.month).join(Registration).filter(
             Registration.user_id == callback_query.from_user.id,
             Tournament.date.between(season_start, season_end),
@@ -869,7 +869,7 @@ async def process_my_registrations_month(callback_query: types.CallbackQuery, st
     selected_month = callback_query.data.split('_')[-1]
     session = SessionLocal()
     try:
-        season_start, season_end = get_season_date_range(get_current_season_key())
+        season_start, season_end = get_active_tournament_date_range()
         regs = sort_by_tournament_date(
             session.query(Registration).join(Tournament).filter(
                 Registration.user_id == callback_query.from_user.id,
