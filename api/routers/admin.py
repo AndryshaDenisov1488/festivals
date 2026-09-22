@@ -529,6 +529,7 @@ def admin_update_user(
 @router.get("/tournaments")
 def admin_list_tournaments(
     month: Optional[str] = Query(None),
+    season: Optional[str] = Query(None, description="Ключ сезона вида 2026-2027 или all"),
     future_only: bool = Query(False),
     search: Optional[str] = Query(None),
     admin: User = Depends(get_current_admin),
@@ -536,6 +537,9 @@ def admin_list_tournaments(
     db = SessionLocal()
     try:
         q = db.query(Tournament)
+        season_start, season_end, _ = _resolve_season_bounds(season)
+        if season_start is not None and season_end is not None:
+            q = q.filter(Tournament.date.between(season_start, season_end))
         if month:
             q = q.filter(Tournament.month == month)
         if future_only:
