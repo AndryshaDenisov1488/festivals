@@ -115,12 +115,10 @@ class BlockedUserMiddleware(BaseMiddleware):
 
     async def on_process_message(self, message: types.Message, data: dict):
         if message.from_user and self.is_blocked(message.from_user.id):
-            await message.answer("Ваш доступ к боту ограничен. Обратитесь к администратору.")
             raise CancelHandler()
 
     async def on_process_callback_query(self, callback_query: types.CallbackQuery, data: dict):
         if callback_query.from_user and self.is_blocked(callback_query.from_user.id):
-            await callback_query.answer("Доступ к боту ограничен.", show_alert=True)
             raise CancelHandler()
 
 
@@ -146,6 +144,8 @@ async def reminder_job():
             ).all()
             for reg in regs_approved:
                 user = reg.user
+                if user.is_blocked:
+                    continue
                 text = (
                     f"Добрый день!\n"
                     f"Напоминаю, что вы утверждены судить турнир <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> завтра.\n"
@@ -159,10 +159,11 @@ async def reminder_job():
                 if user.email:
                     try:
                         from api.email_service import send_tournament_reminder_email
-                        send_tournament_reminder_email(
+                        await asyncio.to_thread(
+                            send_tournament_reminder_email,
                             user.email,
                             t.name,
-                            t.date.strftime('%d.%m.%Y')
+                            t.date.strftime('%d.%m.%Y'),
                         )
                         logger.info("[reminder_job] Sent reminder email to %s", user.email)
                     except Exception as e:

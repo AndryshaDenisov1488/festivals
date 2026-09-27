@@ -264,7 +264,7 @@ async def process_link_email_input(message: types.Message, state: FSMContext):
         user.email_verification_expires_at = now + timedelta(minutes=15)
         session.commit()
 
-        send_login_code_email(email, code)
+        await asyncio.to_thread(send_login_code_email, email, code)
         await state.update_data(email=email)
         await LinkEmail.waiting_for_code.set()
         await message.answer(
@@ -407,6 +407,8 @@ async def process_tournament(callback_query: types.CallbackQuery):
         if not user or not tournament:
             await callback_query.message.answer("❌ Ошибка записи на турнир.")
             return
+        if user.is_blocked:
+            return
 
         existing_registration = session.query(Registration).filter(
             Registration.user_id == user.user_id,
@@ -476,7 +478,9 @@ async def process_tournament(callback_query: types.CallbackQuery):
             try:
                 from api.email_service import send_new_registration_to_admin_email
                 user_name = f"{user.first_name} {user.last_name}"
-                send_new_registration_to_admin_email(ADMIN_EMAIL, user_name, tournament_str)
+                await asyncio.to_thread(
+                    send_new_registration_to_admin_email, ADMIN_EMAIL, user_name, tournament_str
+                )
             except Exception as e:
                 logger.exception("Ошибка отправки email админу о новой заявке: %s", e)
 

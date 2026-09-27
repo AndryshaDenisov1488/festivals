@@ -26,6 +26,16 @@ class BudgetService:
     def __del__(self):
         if hasattr(self, 'session'):
             self.session.close()
+
+    def _active_admin_ids(self) -> list[int]:
+        from config import ADMIN_IDS
+        return [
+            user_id
+            for (user_id,) in self.session.query(User.user_id).filter(
+                User.user_id.in_(ADMIN_IDS),
+                User.is_blocked == False,
+            ).all()
+        ]
     
     async def send_budget_reminders(self) -> int:
         """Отправляет напоминания о бюджете за 12 часов до турнира"""
@@ -90,9 +100,7 @@ class BudgetService:
         )
         
         if self.bot:
-            # Используем конфигурацию вместо хардкода
-            from config import ADMIN_IDS
-            for admin_id in ADMIN_IDS:
+            for admin_id in self._active_admin_ids():
                 await self.bot.send_message(
                     chat_id=admin_id,
                     text=message,
@@ -118,9 +126,7 @@ class BudgetService:
         message += f"\nВыберите турнир для установки бюджета:"
         
         if self.bot:
-            # Используем конфигурацию вместо хардкода
-            from config import ADMIN_IDS
-            for admin_id in ADMIN_IDS:
+            for admin_id in self._active_admin_ids():
                 await self.bot.send_message(
                     chat_id=admin_id,
                     text=message,

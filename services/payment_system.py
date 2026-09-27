@@ -4,6 +4,7 @@
 """
 
 import logging
+import asyncio
 from datetime import datetime, time, timedelta, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
@@ -329,11 +330,14 @@ class PaymentSystem:
             # Берем все прошедшие/сегодняшние неоплаченные турниры: вопрос
             # продолжается до подтверждения оплаты с суммой, но не дольше
             # двух календарных дней после турнира.
-            unpaid_payments = session.query(JudgePayment).join(Tournament).filter(
+            unpaid_payments = session.query(JudgePayment).join(Tournament).join(
+                User, User.user_id == JudgePayment.user_id
+            ).filter(
                 and_(
                     Tournament.date >= window_start,
                     Tournament.date <= today,
-                    JudgePayment.is_paid == False
+                    JudgePayment.is_paid == False,
+                    User.is_blocked == False,
                 )
             ).limit(500).all()
             
@@ -440,12 +444,13 @@ class PaymentSystem:
         if payment.user.email and not is_ignore_followup:
             try:
                 from api.email_service import send_payment_reminder_email
-                send_payment_reminder_email(
+                await asyncio.to_thread(
+                    send_payment_reminder_email,
                     payment.user.email,
                     payment.user.first_name,
                     payment.tournament.name,
                     payment.tournament.date.strftime('%d.%m.%Y'),
-                    is_repeat=payment.reminder_sent
+                    is_repeat=payment.reminder_sent,
                 )
             except Exception as e:
                 logger.exception("Ошибка отправки email напоминания об оплате: %s", e)
@@ -500,7 +505,7 @@ class PaymentSystem:
                         f"Спасибо за работу! 🙏"
                     )
                 
-                if self.bot:
+                if self.bot and not payment.user.is_blocked:
                     await self.bot.send_message(
                         chat_id=payment.user.user_id,
                         text=message,
@@ -560,7 +565,18 @@ class PaymentSystem:
             f"💸 <b>ОПЛАТИ, ИНАЧЕ У ТЕБЯ НЕ БУДУТ СУДИТЬ!</b> 😤"
         )
         
-        for admin_id in ADMIN_IDS:
+        session = SessionLocal()
+        try:
+            active_admin_ids = [
+                user_id
+                for (user_id,) in session.query(User.user_id).filter(
+                    User.user_id.in_(ADMIN_IDS),
+                    User.is_blocked == False,
+                ).all()
+            ]
+        finally:
+            session.close()
+        for admin_id in active_admin_ids:
             try:
                 await self.bot.send_message(
                     chat_id=admin_id,

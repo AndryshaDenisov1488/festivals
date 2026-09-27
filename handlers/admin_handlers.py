@@ -32,6 +32,28 @@ logger = logging.getLogger(__name__)
 
 
 # ========== Вспомогательные функции ==========
+async def send_in_batches(bot, users, text: str, *, parse_mode: str = "HTML") -> tuple[int, int]:
+    """Отправляет сообщения активным судьям без последовательной задержки."""
+    active_users = [user for user in users if not getattr(user, "is_blocked", False)]
+    sent = failed = 0
+    batch_size = 25
+    for index in range(0, len(active_users), batch_size):
+        batch = active_users[index:index + batch_size]
+        results = await asyncio.gather(
+            *(bot.send_message(user.user_id, text, parse_mode=parse_mode) for user in batch),
+            return_exceptions=True,
+        )
+        for user, result in zip(batch, results):
+            if isinstance(result, Exception):
+                failed += 1
+                logger.error("Не удалось отправить сообщение user_id=%s: %s", user.user_id, result)
+            else:
+                sent += 1
+        if index + batch_size < len(active_users):
+            await asyncio.sleep(1)
+    return sent, failed
+
+
 async def send_tournament_change_notification(bot, users, old_tournament, new_tournament):
     """
     Отправляет детальное уведомление об изменении турнира всем пользователям
@@ -62,35 +84,7 @@ async def send_tournament_change_notification(bot, users, old_tournament, new_to
     for change in changes:
         message += f"• {change}\n"
     
-    # Отправляем всем пользователям батчами для оптимизации
-    batch_size = 50  # Отправляем по 50 пользователей за раз
-    for i in range(0, len(users), batch_size):
-        batch = users[i:i + batch_size]
-        tasks = []
-        for user in batch:
-            task = bot.send_message(user.user_id, message, parse_mode="HTML")
-            tasks.append(task)
-        
-        # Выполняем все задачи в батче параллельно
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Обрабатываем ошибки
-        for j, result in enumerate(results):
-            if isinstance(result, Exception):
-                user = batch[j]
-                logger.error("Failed to send tournament change notification to user %s: %s", user.user_id, result)
-                # Отправляем ошибку в мониторинг
-                error_monitor = get_error_monitor()
-                if error_monitor:
-                    await error_monitor.log_warning(
-                        f"Failed to send tournament change notification",
-                        f"user_id={user.user_id}, tournament_id={new_tournament.tournament_id}",
-                        user.user_id
-                    )
-        
-        # Пауза между батчами
-        if i + batch_size < len(users):
-            await asyncio.sleep(1)
+    await send_in_batches(bot, users, message)
 
 
 # ========== /admin — Главное меню для админа ==========
@@ -359,17 +353,12 @@ async def process_add_tournament_name(message: types.Message, state: FSMContext)
         )
 
         # Уведомим всех пользователей
-        referees = session.query(User).all()
-        for ref in referees:
-            try:
-                await message.bot.send_message(
-                    ref.user_id,
-                    f"🆕 Добавлен турнир <b>{formatted}</b> в <b>{tournament.month}</b>.",
-                    parse_mode=ParseMode.HTML
-                )
-                await asyncio.sleep(0.05)
-            except Exception as e:
-                logger.error("Notify failed user_id=%s: %s", ref.user_id, e)
+        referees = session.query(User).filter(User.is_blocked == False).all()
+        await send_in_batches(
+            message.bot,
+            referees,
+            f"🆕 Добавлен турнир <b>{formatted}</b> в <b>{tournament.month}</b>.",
+        )
 
     except SQLAlchemyError as e:
         logger.exception("DB error on add tournament")
@@ -577,7 +566,7 @@ async def process_edit_tournament_new_name(message: types.Message, state: FSMCon
             )
             
             # Отправляем детальные уведомления всем пользователям
-            users = session.query(User).all()
+            users = session.query(User).filter(User.is_blocked == False).all()
             await send_tournament_change_notification(message.bot, users, old_tournament, tournament)
         else:
             await message.answer("❌ Турнир не найден.")
@@ -837,7 +826,7 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                 logger.info(f"Удален турнир {tournament_id}: платежей={payments_deleted}, регистраций={registrations_deleted}, бюджетов={budgets_deleted}")
 
                 # Уведомим всех (Telegram + email)
-                for u in session.query(User).all():
+                for u in session.query(User).filter(User.is_blocked == False).all():
                     try:
                         await cb.message.bot.send_message(u.user_id, f"❗️ Турнир «{title}» ({month}) удалён админом.")
                     except Exception as e:
@@ -845,7 +834,7 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                     if u.email:
                         try:
                             from api.email_service import send_tournament_deleted_email
-                            send_tournament_deleted_email(u.email, title, month)
+                            await asyncio.to_thread(send_tournament_deleted_email, u.email, title, month)
                         except Exception as e:
                             logger.exception("Ошибка email об удалении турнира для %s: %s", u.email, e)
 
@@ -916,16 +905,9 @@ async def process_sendall_message(message: types.Message, state: FSMContext):
 
     session = SessionLocal()
     try:
-        users = session.query(User).all()
-        total, ok, fail = len(users), 0, 0
-        for u in users:
-            try:
-                await message.bot.send_message(u.user_id, admin_message, parse_mode=ParseMode.HTML)
-                ok += 1
-                await asyncio.sleep(0.1)  # Увеличиваем задержку для безопасности
-            except Exception as e:
-                logger.error("Broadcast fail to user_id=%s: %s", u.user_id, e)
-                fail += 1
+        users = session.query(User).filter(User.is_blocked == False).all()
+        total = len(users)
+        ok, fail = await send_in_batches(message.bot, users, admin_message)
 
         await message.answer(
             f"✅ Сообщение отправлено.\nВсего: {total}\nУспешно: {ok}\nНе удалось: {fail}"
@@ -1058,15 +1040,16 @@ async def process_approve_registration(callback_query: types.CallbackQuery):
             u = registration.user
             t = registration.tournament
             await callback_query.answer("Заявка утверждена.")
-            await callback_query.message.bot.send_message(
-                u.user_id,
-                f"✅ Вы утверждены для судейства турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b>!",
-                parse_mode=ParseMode.HTML
-            )
-            if u.email:
+            if not u.is_blocked:
+                await callback_query.message.bot.send_message(
+                    u.user_id,
+                    f"✅ Вы утверждены для судейства турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b>!",
+                    parse_mode=ParseMode.HTML
+                )
+            if u.email and not u.is_blocked:
                 try:
                     from api.email_service import send_registration_approved_email
-                    send_registration_approved_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                    await asyncio.to_thread(send_registration_approved_email, u.email, t.name, t.date.strftime('%d.%m.%Y'))
                     logger.info("Email approve отправлен на %s", u.email)
                 except Exception as e:
                     logger.exception("Ошибка email approve: %s", e)
@@ -1100,15 +1083,16 @@ async def process_reject_registration(callback_query: types.CallbackQuery):
             u = registration.user
             t = registration.tournament
             await callback_query.answer("Заявка отклонена.")
-            await callback_query.message.bot.send_message(
-                u.user_id,
-                f"❌ Ваша заявка на судейство турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> отклонена.",
-                parse_mode=ParseMode.HTML
-            )
-            if u.email:
+            if not u.is_blocked:
+                await callback_query.message.bot.send_message(
+                    u.user_id,
+                    f"❌ Ваша заявка на судейство турнира <b>{t.date.strftime('%d.%m.%Y')} {t.name}</b> отклонена.",
+                    parse_mode=ParseMode.HTML
+                )
+            if u.email and not u.is_blocked:
                 try:
                     from api.email_service import send_registration_rejected_email
-                    send_registration_rejected_email(u.email, t.name, t.date.strftime('%d.%m.%Y'))
+                    await asyncio.to_thread(send_registration_rejected_email, u.email, t.name, t.date.strftime('%d.%m.%Y'))
                     logger.info("Email reject отправлен на %s", u.email)
                 except Exception as e:
                     logger.exception("Ошибка email reject: %s", e)
