@@ -34,6 +34,7 @@ class ActionType(Enum):
     # Система оплаты
     ADMIN_CREATE_PAYMENT_RECORDS = "admin_create_payment_records"
     USER_CONFIRM_PAYMENT = "user_confirm_payment"
+    USER_CORRECT_PAYMENT = "user_correct_payment"
     USER_REPORT_UNPAID = "user_report_unpaid"
     ADMIN_MANUAL_PAYMENT = "admin_manual_payment"
 
@@ -120,6 +121,7 @@ class ActionLogger:
             ActionType.SYSTEM_ERROR: "Системная ошибка",
             ActionType.ADMIN_CREATE_PAYMENT_RECORDS: "Создание записей об оплате",
             ActionType.USER_CONFIRM_PAYMENT: "Подтверждение оплаты",
+        ActionType.USER_CORRECT_PAYMENT: "Исправление суммы выплаты",
             ActionType.USER_REPORT_UNPAID: "Сообщение о неоплате",
             ActionType.ADMIN_MANUAL_PAYMENT: "Ручной ввод заработка админом"
         }

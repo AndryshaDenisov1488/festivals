@@ -35,10 +35,16 @@ export default function EarningsPage() {
   const [modalPayment, setModalPayment] = useState<Payment | null>(null)
   const [monthFilter, setMonthFilter] = useState<MonthFilterValue>('all')
   const [search, setSearch] = useState('')
+  const [isSpecialJudge, setIsSpecialJudge] = useState(false)
+  const [confirmNonStandard, setConfirmNonStandard] = useState(false)
+  const [correctNonStandard, setCorrectNonStandard] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
+    api<{ is_special_judge?: boolean }>('/api/v1/users/me', { token }).then((me) => {
+      setIsSpecialJudge(Boolean(me?.is_special_judge))
+    }).catch(() => setIsSpecialJudge(false))
     const load = () => {
       const params = new URLSearchParams()
       if (monthFilter === 'future') params.set('future_only', 'true')
@@ -62,77 +68,63 @@ export default function EarningsPage() {
     return () => { if (id) clearTimeout(id) }
   }, [monthFilter, search])
 
-  const handleConfirm = async (payment: Payment) => {
-    const amount = parseFloat(confirmAmount)
-    if (isNaN(amount) || amount < 3500) {
+  const submitAmount = async (payment: Payment, mode: 'confirm' | 'correct') => {
+    const raw = mode === 'confirm' ? confirmAmount : correctAmount
+    const amount = parseFloat(raw)
+    const confirmed = mode === 'confirm' ? confirmNonStandard : correctNonStandard
+    if (isNaN(amount) || amount <= 0) {
+      alert('Введите положительную сумму')
+      return
+    }
+    if (!isSpecialJudge && amount < 3500) {
       alert('Минимальная сумма 3500 ₽')
       return
     }
-    const token = localStorage.getItem('token')
-    if (!token) return
-    setConfirming(payment.payment_id)
-    try {
-      await api(`/api/v1/earnings/my/confirm`, {
-        method: 'POST',
-        body: JSON.stringify({ payment_id: payment.payment_id, amount }),
-        token: token ?? undefined
-      })
-      const paymentDate = new Date().toLocaleString('ru-RU', {
-        timeZone: 'Europe/Moscow',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-      setPayments((prev) =>
-        prev.map((p) =>
-          p.payment_id === payment.payment_id
-            ? { ...p, is_paid: true, amount, payment_date: paymentDate }
-            : p
-        )
-      )
-      const refreshToken = localStorage.getItem('token')
-      if (refreshToken) {
-        api<SummaryResponse>('/api/v1/earnings/my/summary', { token: refreshToken ?? undefined }).then(setSummary).catch(() => {})
-      }
-      setModalPayment(null)
-      setConfirmAmount('')
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка')
-    } finally {
-      setConfirming(null)
-    }
-  }
-
-  const handleCorrect = async (payment: Payment) => {
-    const amount = parseFloat(correctAmount)
-    if (isNaN(amount) || amount <= 0) {
-      alert('Введите корректную сумму')
+    if (!isSpecialJudge && amount !== 5000 && !confirmed) {
+      if (mode === 'confirm') setConfirmNonStandard(true)
+      else setCorrectNonStandard(true)
       return
     }
     const token = localStorage.getItem('token')
     if (!token) return
-    setCorrecting(payment.payment_id)
+    if (mode === 'confirm') setConfirming(payment.payment_id)
+    else setCorrecting(payment.payment_id)
     try {
-      await api(`/api/v1/earnings/my/correct`, {
+      await api(mode === 'confirm' ? '/api/v1/earnings/my/confirm' : '/api/v1/earnings/my/correct', {
         method: 'POST',
-        body: JSON.stringify({ payment_id: payment.payment_id, amount }),
-        token: token ?? undefined
+        body: JSON.stringify({ payment_id: payment.payment_id, amount, confirm_non_standard: confirmed || amount === 5000 || isSpecialJudge }),
+        token
       })
-      setPayments((prev) =>
-        prev.map((p) =>
-          p.payment_id === payment.payment_id ? { ...p, amount } : p
-        )
-      )
+      if (mode === 'confirm') {
+        const paymentDate = new Date().toLocaleString('ru-RU', {
+          timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        })
+        setPayments((prev) => prev.map((p) => p.payment_id === payment.payment_id ? { ...p, is_paid: true, amount, payment_date: paymentDate } : p))
+        api<SummaryResponse>('/api/v1/earnings/my/summary', { token }).then(setSummary).catch(() => {})
+      } else {
+        setPayments((prev) => prev.map((p) => p.payment_id === payment.payment_id ? { ...p, amount } : p))
+      }
       setModalPayment(null)
+      setConfirmAmount('')
       setCorrectAmount('')
+      setConfirmNonStandard(false)
+      setCorrectNonStandard(false)
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка')
+      const message = err instanceof Error ? err.message : 'Ошибка'
+      if (message === 'non_standard') {
+        if (mode === 'confirm') setConfirmNonStandard(true)
+        else setCorrectNonStandard(true)
+        return
+      }
+      alert(message)
     } finally {
+      setConfirming(null)
       setCorrecting(null)
     }
   }
+
+  const handleConfirm = async (payment: Payment) => submitAmount(payment, 'confirm')
+  const handleCorrect = async (payment: Payment) => submitAmount(payment, 'correct')
 
   if (loading) {
     return (
@@ -273,7 +265,7 @@ export default function EarningsPage() {
       {modalPayment && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setModalPayment(null)}
+          onClick={() => { setModalPayment(null); setConfirmNonStandard(false); setCorrectNonStandard(false) }}
         >
           <div
             className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl mx-4 max-h-[90vh] overflow-y-auto"
@@ -290,11 +282,14 @@ export default function EarningsPage() {
                 <input
                   type="number"
                   value={confirmAmount}
-                  onChange={(e) => setConfirmAmount(e.target.value)}
+                  onChange={(e) => { setConfirmAmount(e.target.value); setConfirmNonStandard(false) }}
                   placeholder="3500"
                   min={3500}
                   className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
+                {confirmNonStandard && (
+                  <p className="mb-3 text-sm text-amber-700">Сумма отличается от стандартных 5000 ₽. Нажмите ещё раз, чтобы подтвердить.</p>
+                )}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleConfirm(modalPayment)}
@@ -304,7 +299,7 @@ export default function EarningsPage() {
                     {confirming ? 'Сохранение...' : 'Подтвердить'}
                   </button>
                   <button
-                    onClick={() => setModalPayment(null)}
+                    onClick={() => { setModalPayment(null); setConfirmNonStandard(false); setCorrectNonStandard(false) }}
                     className="min-h-[44px] rounded-lg border border-slate-300 px-4 py-2.5 hover:bg-slate-50"
                   >
                     Отмена
@@ -319,10 +314,13 @@ export default function EarningsPage() {
                 <input
                   type="number"
                   value={correctAmount}
-                  onChange={(e) => setCorrectAmount(e.target.value)}
+                  onChange={(e) => { setCorrectAmount(e.target.value); setCorrectNonStandard(false) }}
                   min={1}
                   className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2"
                 />
+                {correctNonStandard && (
+                  <p className="mb-3 text-sm text-amber-700">Сумма отличается от стандартных 5000 ₽. Нажмите ещё раз, чтобы подтвердить.</p>
+                )}
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleCorrect(modalPayment)}
@@ -332,7 +330,7 @@ export default function EarningsPage() {
                     {correcting ? 'Сохранение...' : 'Сохранить'}
                   </button>
                   <button
-                    onClick={() => setModalPayment(null)}
+                    onClick={() => { setModalPayment(null); setConfirmNonStandard(false); setCorrectNonStandard(false) }}
                     className="min-h-[44px] rounded-lg border border-slate-300 px-4 py-2.5 hover:bg-slate-50"
                   >
                     Отмена

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 import pytz
@@ -26,7 +27,6 @@ from handlers.common_handlers import (
 from handlers.user_handlers import (
     process_sign_up, process_month, process_tournament,
     process_festmates_start, process_festmates_month, process_festmates_tournament,
-    setup_main_menu_button_handlers,
     cmd_link_email, link_email_step, process_link_email_input, process_link_email_code,
     process_cancel_registration, process_cancel_reg_month, process_cancel_reg_id,
     process_confirm_cancel, process_cancel_action,
@@ -58,9 +58,9 @@ from handlers.admin_handlers import (
     # календарь
     calendar_callbacks,
     # удаление турнира
-    delete_tournament_step, process_delete_month, process_delete_tournament, process_delete_confirm,
+    process_delete_month, process_delete_tournament, process_delete_confirm,
     # рассылка
-    process_sendall_message, admin_sendall_action,
+    process_sendall_message,
     # заработок судей
     admin_judge_earnings_menu, admin_earnings_monthly, admin_earnings_yearly, admin_earnings_seasonal,
     process_earnings_month, process_earnings_year,
@@ -282,7 +282,6 @@ dp.register_callback_query_handler(process_back_to_main, Text(equals="back_to_ma
 dp.register_callback_query_handler(process_cancel_payment_input, Text(equals="cancel_payment_input"), state="*")
 
 # Кнопка «Вызвать главное меню» (ReplyButton)
-setup_main_menu_button_handlers(dp)
 
 # Пользовательские экраны (state="*" чтобы работало при любом FSM состоянии)
 dp.register_callback_query_handler(process_sign_up, Text(equals="sign_up"), state="*")

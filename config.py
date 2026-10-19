@@ -8,6 +8,14 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 # Список админов (ID через запятую в .env)
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
+
+# Judges who may enter any positive amount (no 3500 minimum and no 5000 standard check).
+_special_raw = os.getenv("SPECIAL_JUDGE_IDS", "946719504")
+SPECIAL_JUDGE_IDS = {
+    int(part.strip())
+    for part in _special_raw.split(",")
+    if part.strip()
+}
 # Канал или чат для уведомлений (например, "-1001234567890" или "@your_channel")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")
 # Email админа для уведомлений о новых заявках (опционально)

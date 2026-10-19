@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from api.dependencies import get_current_user
 from api.schemas.users import ProfileUpdateIn
 from config import ADMIN_IDS
+from services.payment_rules import is_special_judge
 from database import SessionLocal
 from models import User
 
@@ -20,6 +21,7 @@ def get_me(user: User = Depends(get_current_user)):
         "category": user.category,
         "email": getattr(user, "email", None),
         "is_admin": user.user_id in ADMIN_IDS,
+        "is_special_judge": is_special_judge(user.user_id),
         "has_password": getattr(user, "password_hash", None) is not None,
     }
 

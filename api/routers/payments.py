@@ -2,7 +2,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from models import User, JudgePayment, Tournament
@@ -12,14 +11,6 @@ from services.payment_system import PaymentSystem
 
 
 router = APIRouter()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.get("/earnings/my/payments")
@@ -123,6 +114,7 @@ def earnings_summary(
 class ConfirmPaymentIn(BaseModel):
     payment_id: int
     amount: float
+    confirm_non_standard: bool = False
 
 
 @router.post("/earnings/my/confirm")
@@ -130,50 +122,34 @@ async def confirm_payment(
     payload: ConfirmPaymentIn,
     user: User = Depends(get_current_user),
 ):
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        payment = db.query(JudgePayment).filter(
-            JudgePayment.payment_id == payload.payment_id,
-            JudgePayment.user_id == user.user_id,
-            JudgePayment.is_paid == False,
-        ).first()
-        if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
-        if payload.amount < 3500:
-            raise HTTPException(status_code=400, detail="Min amount 3500")
-        ps = PaymentSystem(bot=None)
-        ok = await ps.handle_payment_confirmation(payload.payment_id, True, payload.amount)
-        if not ok:
-            raise HTTPException(status_code=500, detail="Не удалось сохранить подтверждение. Попробуйте позже или обратитесь к администратору.")
-        return {"ok": True}
-    finally:
-        db.close()
+    from services.payment_rules import check_payment_amount, amount_error_detail
 
-
-class CorrectEarningsIn(BaseModel):
-    payment_id: int
-    amount: float
+    code = check_payment_amount(user.user_id, payload.amount, payload.confirm_non_standard)
+    if code != "ok":
+        raise HTTPException(status_code=400, detail=amount_error_detail(code))
+    ps = PaymentSystem(bot=None)
+    ok = await ps.handle_payment_confirmation(
+        payload.payment_id, True, payload.amount, expected_user_id=user.user_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return {"ok": True}
 
 
 @router.post("/earnings/my/correct")
-def correct_earnings(
+async def correct_earnings(
     payload: CorrectEarningsIn,
     user: User = Depends(get_current_user),
 ):
-    db = SessionLocal()
-    try:
-        payment = db.query(JudgePayment).filter(
-            JudgePayment.payment_id == payload.payment_id,
-            JudgePayment.user_id == user.user_id,
-            JudgePayment.is_paid == True,
-        ).first()
-        if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
-        if payload.amount <= 0:
-            raise HTTPException(status_code=400, detail="Amount must be positive")
-        payment.amount = payload.amount
-        db.commit()
-        return {"ok": True}
-    finally:
-        db.close()
+    from services.payment_rules import check_payment_amount, amount_error_detail
+
+    code = check_payment_amount(user.user_id, payload.amount, payload.confirm_non_standard)
+    if code != "ok":
+        raise HTTPException(status_code=400, detail=amount_error_detail(code))
+    ps = PaymentSystem(bot=None)
+    ok = await ps.correct_paid_amount(
+        payload.payment_id, payload.amount, expected_user_id=user.user_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return {"ok": True}

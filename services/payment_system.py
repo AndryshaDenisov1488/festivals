@@ -455,7 +455,7 @@ class PaymentSystem:
             except Exception as e:
                 logger.exception("Ошибка отправки email напоминания об оплате: %s", e)
     
-    async def handle_payment_confirmation(self, payment_id: int, is_paid: bool, amount: Optional[float] = None):
+    async def handle_payment_confirmation(self, payment_id: int, is_paid: bool, amount: Optional[float] = None, expected_user_id: Optional[int] = None):
         """Обрабатывает подтверждение оплаты от судьи"""
         session = SessionLocal()
         
@@ -465,6 +465,13 @@ class PaymentSystem:
                 logger.error(f"Запись об оплате с ID {payment_id} не найдена")
                 return False
             
+            if expected_user_id is not None and payment.user_id != expected_user_id:
+                logger.error("payment %s does not belong to user %s", payment_id, expected_user_id)
+                return False
+            if is_paid and payment.is_paid:
+                logger.info("payment %s is already paid", payment_id)
+                return False
+
             now_utc = datetime.now(timezone.utc)
 
             if is_paid:
@@ -596,6 +603,34 @@ class PaymentSystem:
         logger.info("Автоматические напоминания админу пропущены: уведомления отправляются при ответе судьи 'Нет'")
         return 0
     
+    async def correct_paid_amount(self, payment_id: int, amount: float, expected_user_id: Optional[int] = None) -> bool:
+        """Change an already paid amount and refresh the tournament budget."""
+        session = SessionLocal()
+        try:
+            payment = session.query(JudgePayment).filter(JudgePayment.payment_id == payment_id).first()
+            if not payment or not payment.is_paid:
+                return False
+            if expected_user_id is not None and payment.user_id != expected_user_id:
+                return False
+            payment.amount = amount
+            tournament_id = payment.tournament_id
+            session.commit()
+        except Exception as e:
+            logger.error("correct_paid_amount failed: %s", e)
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
+        from services.budget_service import get_budget_service
+        await get_budget_service(self.bot).update_judges_payment(tournament_id)
+        if self.action_logger:
+            await self.action_logger.log_action(
+                ActionType.USER_CORRECT_PAYMENT,
+                "payment_id=%s amount=%s" % (payment_id, amount),
+            )
+        return True
+
     def get_judge_earnings(self, user_id: int) -> dict:
         """Получает информацию о заработке судьи"""
         session = SessionLocal()

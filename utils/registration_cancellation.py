@@ -147,12 +147,6 @@ def enrich_judge_refusal_stats(
     return result
 
 
-def approved_refusals_stats_list(by_user: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
-    result = [stats for stats in by_user.values() if stats["refusals"] > 0]
-    result.sort(key=lambda x: (-x["refusals"], x.get("user_name", "")))
-    return result
-
-
 def get_responsibility_label(refusal_pct: float) -> str:
     if refusal_pct <= 5:
         return "Очень высокая"

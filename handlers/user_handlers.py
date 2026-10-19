@@ -17,7 +17,7 @@ from keyboards import main_menu
 from services.excel_export import split_text
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
-from utils.text_utils import is_affirmative_answer
+from services.payment_rules import is_special_judge
 from utils.date_utils import sort_month_names, sort_by_tournament_date
 from utils.season import get_active_tournament_date_range
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
@@ -913,29 +913,6 @@ async def process_my_registrations_month(callback_query: types.CallbackQuery, st
         await callback_query.answer()
 
 
-# ======== Reply-кнопка «Вызвать главное меню» ========
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram.dispatcher.filters import Text
-
-def main_reply_keyboard():
-    """
-    Создаёт Reply-клавиатуру с кнопкой "Вызвать главное меню".
-    """
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(KeyboardButton("Вызвать главное меню"))
-    return kb
-
-async def handle_main_menu_button(message: types.Message):
-    """
-    Когда пользователь нажимает кнопку "Вызвать главное меню" (Reply-кнопка),
-    выводим инлайн-меню (или что-то ещё).
-    """
-    await message.answer("Главное меню!", reply_markup=main_menu())
-
-def setup_main_menu_button_handlers(dp):
-    dp.register_message_handler(handle_main_menu_button, Text(equals="Вызвать главное меню"))
-
-# ======== Система заработка ========
 async def process_my_earnings(callback_query: types.CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Мой заработок'"""
     # Завершаем состояние PaymentAmount или CorrectEarnings если оно активно
@@ -1143,82 +1120,47 @@ async def process_payment_no(callback_query: types.CallbackQuery):
         await callback_query.answer()
 
 async def process_payment_amount(message: types.Message, state: FSMContext):
-    """Обработка введенной суммы оплаты"""
+    """Save the amount a judge says they were paid."""
     try:
-        if not message.text:
-            await message.answer("❌ Пожалуйста, отправьте текстовое сообщение.")
-            return
-            
-        amount = float(message.text.strip().replace(',', '.'))
-        if amount <= 0:
-            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
-            return
-        
-        # Проверка минимальной суммы оплаты
-        MIN_PAYMENT_AMOUNT = 3500
-        if amount < MIN_PAYMENT_AMOUNT:
-            await message.answer(
-                f"❌ Минимальная сумма оплаты составляет {MIN_PAYMENT_AMOUNT} рублей.\n"
-                f"Вы ввели {amount} рублей. Пожалуйста, введите корректную сумму:"
-            )
-            return
-        
-        # Получаем ID платежа из callback_data (нужно будет передать через состояние)
-        # Пока что используем простой подход - ищем последний неоплаченный платеж пользователя
+        from services.payment_rules import parse_amount_message, check_payment_amount, rejection_text
         from services.payment_system import get_payment_system
-        from database import SessionLocal
-        from models import JudgePayment
-        
-        session = SessionLocal()
-        try:
-            # Получаем сохраненный ID платежа из состояния
-            data = await state.get_data()
-            payment_id = data.get('payment_id')
-            
-            if not payment_id:
-                await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
-                await state.finish()
-                return
-            
-            # Проверяем, что платеж принадлежит пользователю и не оплачен
-            payment = session.query(JudgePayment).filter(
-                JudgePayment.payment_id == payment_id,
-                JudgePayment.user_id == message.from_user.id,
-                JudgePayment.is_paid == False
-            ).first()
-            
-            if not payment:
-                await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
-                await state.finish()
-                return
-            
-            # Обрабатываем подтверждение оплаты
-            payment_system = get_payment_system(message.bot)
-            await payment_system.handle_payment_confirmation(payment_id, True, amount)
-            
-            # Завершаем FSM сессию
-            from utils.fsm_guard import get_fsm_guard
-            fsm_guard = get_fsm_guard()
-            fsm_guard.end_session(message.from_user.id)
-            
-            await message.answer(
-                "✅ <b>Спасибо!</b> Информация об оплате сохранена.",
-                parse_mode=ParseMode.HTML
-            )
-            
-        finally:
-            session.close()
-            
-    except ValueError:
-        await message.answer("❌ Пожалуйста, введите корректную сумму (например: 3500 или 5000.50):")
-        return
-    except Exception as e:
-        logger.error(f"Неожиданная ошибка в process_payment_amount: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
-    
-    await state.finish()
+        from utils.fsm_guard import get_fsm_guard
 
-# ======== Исправление заработка ========
+        data = await state.get_data()
+        amount, confirmed, err = parse_amount_message(message.text, data.get("pending_amount"))
+        if err:
+            await message.answer(err)
+            return
+        code = check_payment_amount(message.from_user.id, amount, confirmed)
+        if code != "ok":
+            await message.answer(rejection_text(code, amount))
+            if code == "non_standard":
+                await state.update_data(pending_amount=amount)
+            return
+        await state.update_data(pending_amount=None)
+
+        payment_id = data.get("payment_id")
+        if not payment_id:
+            await message.answer("Не удалось найти выплату. Обратитесь к администратору.")
+            await state.finish()
+            return
+
+        ok = await get_payment_system(message.bot).handle_payment_confirmation(
+            payment_id, True, amount, expected_user_id=message.from_user.id
+        )
+        get_fsm_guard().end_session(message.from_user.id)
+        if not ok:
+            await message.answer("Не удалось сохранить оплату. Возможно, она уже подтверждена.")
+            await state.finish()
+            return
+        await message.answer("Спасибо! Информация об оплате сохранена.", parse_mode=ParseMode.HTML)
+        await state.finish()
+    except Exception as e:
+        logger.error("process_payment_amount failed: %s", e)
+        await message.answer("Произошла ошибка. Попробуйте снова.")
+        await state.finish()
+
+
 async def process_correct_earnings(callback_query: types.CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Исправить заработок'"""
     # Завершаем состояние PaymentAmount если оно активно
@@ -1316,7 +1258,7 @@ async def process_correct_earnings_tournament(callback_query: types.CallbackQuer
             return
         
         # Специальная проверка для Лизочки Марковой
-        is_special_judge = payment.user_id == 946719504
+        is_special_judge = is_special_judge(payment.user_id)
         
         current_amount = payment.amount if payment.amount else "не указана"
         
@@ -1361,124 +1303,62 @@ async def process_correct_earnings_tournament(callback_query: types.CallbackQuer
         session.close()
 
 async def process_correct_earnings_amount(message: types.Message, state: FSMContext):
-    """Обработка введенной суммы для исправления заработка"""
+    """Correct an already saved payment amount."""
     try:
-        if not message.text:
-            await message.answer("❌ Пожалуйста, отправьте текстовое сообщение.")
-            return
+        from services.payment_rules import parse_amount_message, check_payment_amount, rejection_text
+        from services.payment_system import get_payment_system
+        from utils.fsm_guard import get_fsm_guard
 
         data = await state.get_data()
-        payment_id = data.get('payment_id')
-        is_special_judge = data.get('is_special_judge', False)
-        pending_amount = data.get('pending_amount')
-        confirmed_non_standard = False
-
-        if pending_amount is not None:
-            if is_affirmative_answer(message.text):
-                amount = pending_amount
-                confirmed_non_standard = True
-                await state.update_data(pending_amount=None)
-            else:
-                try:
-                    amount = float(message.text.strip().replace(',', '.'))
-                    await state.update_data(pending_amount=None)
-                except ValueError:
-                    await message.answer(
-                        "❌ Введите «да» для подтверждения или новую сумму (например: 5000):"
-                    )
-                    return
-        else:
-            try:
-                amount = float(message.text.strip().replace(',', '.'))
-            except ValueError:
-                await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
-                return
-
-        if amount <= 0:
-            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
+        amount, confirmed, err = parse_amount_message(message.text, data.get("pending_amount"))
+        if err:
+            await message.answer(err)
             return
-        
+        payment_id = data.get("payment_id")
         if not payment_id:
-            await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
+            await message.answer("Не удалось найти выплату. Обратитесь к администратору.")
             await state.finish()
             return
-        
+
         session = SessionLocal()
         try:
-            from models import JudgePayment
             payment = session.query(JudgePayment).options(
                 joinedload(JudgePayment.user),
-                joinedload(JudgePayment.tournament)
+                joinedload(JudgePayment.tournament),
             ).filter(JudgePayment.payment_id == payment_id).first()
-            
-            if not payment:
-                await message.answer("❌ Запись об оплате не найдена.")
+            if not payment or payment.user_id != message.from_user.id or not payment.is_paid:
+                await message.answer("Запись об оплате не найдена.")
                 await state.finish()
                 return
-            
-            # Проверяем, что это запись текущего пользователя
-            if payment.user_id != message.from_user.id:
-                await message.answer("❌ Это не ваша запись об оплате.")
-                await state.finish()
+            code = check_payment_amount(payment.user_id, amount, confirmed)
+            if code != "ok":
+                await message.answer(rejection_text(code, amount))
+                if code == "non_standard":
+                    await state.update_data(pending_amount=amount)
                 return
-            
-            # Проверка минимальной суммы (только для обычных судей)
-            MIN_PAYMENT_AMOUNT = 3500
-            if not is_special_judge and amount < MIN_PAYMENT_AMOUNT:
-                await message.answer(
-                    f"❌ Минимальная сумма оплаты составляет {MIN_PAYMENT_AMOUNT} рублей.\n"
-                    f"Вы ввели {amount} рублей. Пожалуйста, введите корректную сумму:"
-                )
-                return
-            
-            # Проверка стандартной суммы (только для обычных судей)
-            STANDARD_PAYMENT_AMOUNT = 5000
-            if (
-                not confirmed_non_standard
-                and not is_special_judge
-                and amount != STANDARD_PAYMENT_AMOUNT
-            ):
-                await message.answer(
-                    f"⚠️ Внимание! Стандартная сумма для всех судей составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
-                    f"Вы ввели {amount} руб.\n\n"
-                    f"Продолжить с этой суммой? (введите «да» для подтверждения или новую сумму):"
-                )
-                await state.update_data(pending_amount=amount)
-                return
-            
-            # Обновляем сумму
             old_amount = payment.amount
-            payment.amount = amount
-            session.commit()
-            
-            # Завершаем FSM сессию
-            from utils.fsm_guard import get_fsm_guard
-            fsm_guard = get_fsm_guard()
-            fsm_guard.end_session(message.from_user.id)
-            
-            await message.answer(
-                f"✅ <b>Заработок успешно исправлен!</b>\n\n"
-                f"💰 Старая сумма: {old_amount if old_amount else 'не указана'} руб.\n"
-                f"💰 Новая сумма: {amount} руб.\n"
-                f"📅 Дата: {payment.tournament.date.strftime('%d.%m.%Y')}\n"
-                f"🏆 Турнир: {payment.tournament.name}",
-                parse_mode=ParseMode.HTML
-            )
-            
-            # Логируем действие
-            action_logger = get_action_logger()
-            if action_logger:
-                await action_logger.log_action(
-                    ActionType.USER_EDIT_PROFILE,
-                    f"Судья {payment.user.first_name} {payment.user.last_name} исправил заработок с {old_amount} на {amount} руб. за турнир {payment.tournament.name}"
-                )
-            
+            tournament_name = payment.tournament.name
+            tournament_date = payment.tournament.date.strftime("%d.%m.%Y")
         finally:
             session.close()
-        
+
+        await state.update_data(pending_amount=None)
+        ok = await get_payment_system(message.bot).correct_paid_amount(
+            payment_id, amount, expected_user_id=message.from_user.id
+        )
+        get_fsm_guard().end_session(message.from_user.id)
+        if not ok:
+            await message.answer("Не удалось изменить сумму.")
+            await state.finish()
+            return
+        await message.answer(
+            "Сумма исправлена: %s → %s руб. %s %s"
+            % (old_amount if old_amount else "—", amount, tournament_date, tournament_name),
+            parse_mode=ParseMode.HTML,
+        )
+        await state.finish()
+    except Exception as e:
+        logger.error("process_correct_earnings_amount failed: %s", e)
+        await message.answer("Произошла ошибка. Попробуйте снова.")
         await state.finish()
 
-    except Exception as e:
-        logger.error(f"Неожиданная ошибка в process_correct_earnings_amount: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
-        await state.finish()

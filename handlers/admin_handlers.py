@@ -19,7 +19,7 @@ from services.excel_export import export_data, split_text
 from utils.calendar import build_calendar, prev_month, next_month  # <- твой модуль календаря
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
-from utils.text_utils import is_affirmative_answer
+from services.payment_rules import is_special_judge
 from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month
 from utils.season import (
     get_active_tournament_date_range,
@@ -1361,7 +1361,7 @@ async def process_manual_payment_tournament(callback_query: types.CallbackQuery,
             return
         
         # Специальная проверка для Лизочки Марковой
-        is_special_judge = payment.user_id == 946719504
+        is_special_judge = is_special_judge(payment.user_id)
         
         if is_special_judge:
             message_text = (
@@ -1393,114 +1393,66 @@ async def process_manual_payment_tournament(callback_query: types.CallbackQuery,
         session.close()
 
 async def process_manual_payment_amount(message: types.Message, state: FSMContext):
-    """Обработка введенной суммы заработка"""
+    """Admin enters a payment amount for a judge."""
     try:
-        if not message.text:
-            await message.answer("❌ Пожалуйста, отправьте текстовое сообщение.")
-            return
+        from services.payment_rules import parse_amount_message, check_payment_amount, rejection_text
+        from services.payment_system import get_payment_system
 
         data = await state.get_data()
-        payment_id = data.get('payment_id')
-        is_special_judge = data.get('is_special_judge', False)
-        pending_amount = data.get('pending_amount')
-        confirmed_non_standard = False
-
-        if pending_amount is not None:
-            if is_affirmative_answer(message.text):
-                amount = pending_amount
-                confirmed_non_standard = True
-                await state.update_data(pending_amount=None)
-            else:
-                try:
-                    amount = float(message.text.strip().replace(',', '.'))
-                    await state.update_data(pending_amount=None)
-                except ValueError:
-                    await message.answer(
-                        "❌ Введите «да» для подтверждения или новую сумму (например: 5000):"
-                    )
-                    return
-        else:
-            try:
-                amount = float(message.text.strip().replace(',', '.'))
-            except ValueError:
-                await message.answer("❌ Пожалуйста, введите корректную сумму (например: 5000 или 5000.50):")
-                return
-
-        if amount <= 0:
-            await message.answer("❌ Сумма должна быть больше нуля. Попробуйте еще раз:")
+        amount, confirmed, err = parse_amount_message(message.text, data.get("pending_amount"))
+        if err:
+            await message.answer(err)
             return
-        
+        payment_id = data.get("payment_id")
         if not payment_id:
-            await message.answer("❌ Не найдена запись об оплате. Обратитесь к администратору.")
+            await message.answer("Не удалось найти выплату.")
             await state.finish()
             return
-        
-        # Проверка минимальной суммы (только для обычных судей)
-        MIN_PAYMENT_AMOUNT = 3500
-        if not is_special_judge and amount < MIN_PAYMENT_AMOUNT:
-            await message.answer(
-                f"❌ Минимальная сумма оплаты составляет {MIN_PAYMENT_AMOUNT} рублей.\n"
-                f"Вы ввели {amount} рублей. Пожалуйста, введите корректную сумму:"
-            )
-            return
-        
-        # Проверка стандартной суммы (только для обычных судей)
-        STANDARD_PAYMENT_AMOUNT = 5000
-        if (
-            not confirmed_non_standard
-            and not is_special_judge
-            and amount != STANDARD_PAYMENT_AMOUNT
-        ):
-            await message.answer(
-                f"⚠️ Внимание! Стандартная сумма для всех судей составляет {STANDARD_PAYMENT_AMOUNT} руб.\n"
-                f"Вы ввели {amount} руб.\n\n"
-                f"Продолжить с этой суммой? (введите «да» для подтверждения или новую сумму):"
-            )
-            await state.update_data(pending_amount=amount)
-            return
-        
-        # Получаем информацию о платеже для логирования
+
         session = SessionLocal()
         try:
             payment = session.query(JudgePayment).options(
                 joinedload(JudgePayment.user),
-                joinedload(JudgePayment.tournament)
+                joinedload(JudgePayment.tournament),
             ).filter(JudgePayment.payment_id == payment_id).first()
-            
-            if not payment:
-                await message.answer("❌ Запись об оплате не найдена.")
+            if not payment or payment.is_paid:
+                await message.answer("Запись об оплате не найдена или уже закрыта.")
                 await state.finish()
                 return
-            
-            # Сохраняем заработок
-            from services.payment_system import get_payment_system
-            payment_system = get_payment_system(message.bot)
-            await payment_system.handle_payment_confirmation(payment_id, True, amount)
-            
-            await message.answer(
-                f"✅ <b>Заработок успешно введен!</b>\n\n"
-                f"💰 Сумма: {amount} руб.\n"
-                f"📅 Дата: {payment.tournament.date.strftime('%d.%m.%Y')}\n"
-                f"🏆 Турнир: {payment.tournament.name}",
-                parse_mode=ParseMode.HTML
-            )
-            
-            # Логируем действие
-            action_logger = get_action_logger()
-            if action_logger:
-                await action_logger.log_action(
-                    ActionType.ADMIN_MANUAL_PAYMENT,
-                    f"Админ вручную ввел заработок {amount} руб. для судьи {payment.user.first_name} {payment.user.last_name} за турнир {payment.tournament.name}"
-                )
+            code = check_payment_amount(payment.user_id, amount, confirmed)
+            if code != "ok":
+                await message.answer(rejection_text(code, amount))
+                if code == "non_standard":
+                    await state.update_data(pending_amount=amount)
+                return
+            judge_name = "%s %s" % (payment.user.first_name, payment.user.last_name)
+            tournament_name = payment.tournament.name
+            tournament_date = payment.tournament.date.strftime("%d.%m.%Y")
         finally:
             session.close()
-        
+
+        await state.update_data(pending_amount=None)
+        ok = await get_payment_system(message.bot).handle_payment_confirmation(payment_id, True, amount)
+        if not ok:
+            await message.answer("Не удалось сохранить оплату.")
+            await state.finish()
+            return
+        action_logger = get_action_logger()
+        if action_logger:
+            await action_logger.log_action(
+                ActionType.ADMIN_MANUAL_PAYMENT,
+                "Ручной ввод %s руб. для %s, %s %s" % (amount, judge_name, tournament_date, tournament_name),
+            )
+        await message.answer(
+            "Оплата сохранена: %s руб., %s, %s" % (amount, tournament_date, tournament_name),
+            parse_mode=ParseMode.HTML,
+        )
+        await state.finish()
+    except Exception as e:
+        logger.error("process_manual_payment_amount failed: %s", e)
+        await message.answer("Произошла ошибка. Попробуйте снова.")
         await state.finish()
 
-    except Exception as e:
-        logger.error(f"Неожиданная ошибка в process_manual_payment_amount: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
-        await state.finish()
 
 async def process_earnings_month(callback_query: types.CallbackQuery):
     """Просмотр заработка за конкретный месяц"""

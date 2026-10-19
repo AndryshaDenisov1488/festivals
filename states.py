@@ -51,7 +51,6 @@ class PaymentAmount(StatesGroup):
 
 # Состояния для исправления заработка судьей
 class CorrectEarnings(StatesGroup):
-    waiting_for_tournament_selection = State()
     waiting_for_amount = State()
 
 # Состояния для системы бюджетирования
@@ -60,7 +59,6 @@ class BudgetInput(StatesGroup):
 
 # Состояния для ручного ввода заработка админом
 class ManualPaymentInput(StatesGroup):
-    waiting_for_judge_selection = State()
     waiting_for_tournament_selection = State()
     waiting_for_amount = State()
 

@@ -54,27 +54,6 @@ def cancel_keyboard(context_type: str = "user"):
         keyboard.add(InlineKeyboardButton("❌ Отменить", callback_data='back_to_main'))
     return keyboard
 
-def month_selection_keyboard(months: list, callback_prefix: str, back_callback: str = "back_to_main"):
-    """
-    Универсальная клавиатура выбора месяца
-    """
-    keyboard = InlineKeyboardMarkup(row_width=3)
-    for month in sort_month_names(months):
-        keyboard.insert(InlineKeyboardButton(month, callback_data=f'{callback_prefix}_{month}'))
-    keyboard.add(InlineKeyboardButton("🔙 Назад", callback_data=back_callback))
-    return keyboard
-
-def confirmation_keyboard(confirm_callback: str, cancel_callback: str = "cancel_action"):
-    """
-    Клавиатура подтверждения
-    """
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.add(
-        InlineKeyboardButton("✅ Да", callback_data=confirm_callback),
-        InlineKeyboardButton("❌ Нет", callback_data=cancel_callback)
-    )
-    return keyboard
-
 def payment_reminder_keyboard(payment_id: int):
     """
     Клавиатура для напоминания об оплате

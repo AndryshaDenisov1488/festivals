@@ -1,11 +1,10 @@
-import os
+from io import BytesIO
 import logging
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Alignment, Font, Border, Side
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.chart import BarChart, Reference, PieChart
-from openpyxl.drawing.image import Image
 from datetime import datetime
 from aiogram import types
 from config import MAX_MESSAGE_LENGTH
@@ -27,9 +26,10 @@ def split_text(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list:
     messages.append(text)
     return messages
 
-async def export_data(bot, callback_query: types.CallbackQuery, period, month=None, year=None):
+def build_export_workbook(session, period, month=None, year=None, season_key=None):
     from models import Registration, Tournament, User
-    session = SessionLocal()
+    if period == 'season' and not season_key:
+        season_key = get_current_season_key()
     try:
         # построить запрос
         query = session.query(Registration).join(Tournament).join(User)
@@ -40,7 +40,6 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
             end   = datetime(year,12,31).date()
             query = query.filter(Tournament.date.between(start, end))
         elif period == 'season':
-            season_key = get_current_season_key()
             start_date, end_date = get_season_date_range(season_key)
             logger.info(f"Экспорт за сезон {season_key}: {start_date} - {end_date}")
             query = query.filter(
@@ -50,8 +49,7 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
 
         regs = query.all()
         if not regs:
-            await bot.send_message(callback_query.from_user.id, "❌ Нет данных для выбранного периода.")
-            return
+            return None, None, None
 
         # сортировка
         regs.sort(key=lambda r: r.tournament.date)
@@ -261,7 +259,7 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
             end = datetime(year, 12, 31).date()
             earnings_query = earnings_query.filter(Tournament.date.between(start, end))
         elif period == 'season':
-            start_date, end_date = get_season_date_range(get_current_season_key())
+            start_date, end_date = get_season_date_range(season_key)
             earnings_query = earnings_query.filter(Tournament.date.between(start_date, end_date))
         
         earnings_data = earnings_query.group_by(User.user_id).all()
@@ -546,47 +544,73 @@ async def export_data(bot, callback_query: types.CallbackQuery, period, month=No
                 ws_stats.add_chart(bar_chart, "J5")
 
         # Сохранить и отправить
-        tmp = f'export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
-        wb.save(tmp)
-        
-        with open(tmp, 'rb') as f:
-            await bot.send_document(
-                callback_query.from_user.id, 
-                f,
-                caption=f"🎉 <b>ПРОФЕССИОНАЛЬНЫЙ ОТЧЕТ ГОТОВ!</b> 🎉\n\n"
-                       f"📅 <b>Период:</b> {period.upper()} {month or year or 'ВСЕ ВРЕМЕНА'}\n"
-                       f"📈 <b>Всего заявок:</b> {total_registrations:,}\n"
-                       f"✅ <b>Утверждено:</b> {total_approved:,}\n"
-                       f"❌ <b>Отклонено:</b> {total_rejected:,}\n"
-                       f"⏳ <b>Ожидает:</b> {total_pending:,}\n"
-                       f"📊 <b>Процент успеха:</b> {approval_rate:.1f}%\n"
-                       f"👥 <b>Уникальных судей:</b> {unique_judges}\n"
-                       f"🏆 <b>Уникальных турниров:</b> {unique_tournaments}\n"
-                       f"💰 <b>Общий заработок:</b> {total_earnings:,.2f} ₽\n"
-                       f"💳 <b>Оплаченных турниров:</b> {total_paid_tournaments}\n\n"
-                       f"📋 <b>Отчет содержит:</b>\n"
-                       f"• Детальную таблицу заявок\n"
-                       f"• Статистику по судьям с рейтингом\n"
-                       f"• Сводную аналитику\n"
-                       f"• Интерактивные графики\n"
-                       f"• Топ-3 самых активных судей",
-                parse_mode="HTML"
-            )
-        
-        os.remove(tmp)
-        await bot.send_message(
-            callback_query.from_user.id, 
-            "✨ <b>Отчет создан с использованием профессионального дизайна!</b>\n\n"
-            "🎨 <b>Особенности отчета:</b>\n"
-            "• Красивое форматирование с цветами\n"
-            "• Рейтинговая система судей\n"
-            "• Интерактивные диаграммы\n"
-            "• Детальная аналитика\n"
-            "• Профессиональный стиль",
-            parse_mode="HTML"
-        )
+                bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        filename = "export_%s.xlsx" % datetime.now().strftime("%Y%m%d_%H%M%S")
+        stats = {
+            "period": period,
+            "month": month,
+            "year": year,
+            "total_registrations": total_registrations,
+            "total_approved": total_approved,
+            "total_rejected": total_rejected,
+            "total_pending": total_pending,
+            "approval_rate": approval_rate,
+            "unique_judges": unique_judges,
+            "unique_tournaments": unique_tournaments,
+            "total_earnings": total_earnings,
+            "total_paid_tournaments": total_paid_tournaments,
+        }
+        return bio, filename, stats
 
+    except SQLAlchemyError:
+        raise
+
+
+async def export_data(bot, callback_query: types.CallbackQuery, period, month=None, year=None):
+    session = SessionLocal()
+    try:
+        season_key = get_current_season_key() if period == "season" else None
+        bio, filename, stats = build_export_workbook(
+            session, period, month=month, year=year, season_key=season_key
+        )
+        if bio is None:
+            await bot.send_message(
+                callback_query.from_user.id,
+                "Нет данных для выбранного периода.",
+            )
+            return
+        period_label = ("%s %s" % (str(period).upper(), month or year or "")).strip()
+        caption = (
+            "Период: %s\n"
+            "Записей: %s\n"
+            "Одобрено: %s\n"
+            "Отклонено: %s\n"
+            "Ожидают: %s\n"
+            "Доля одобрения: %.1f%%\n"
+            "Судей: %s\n"
+            "Турниров: %s\n"
+            "Выплаты: %.2f руб."
+        ) % (
+            period_label,
+            stats["total_registrations"],
+            stats["total_approved"],
+            stats["total_rejected"],
+            stats["total_pending"],
+            stats["approval_rate"],
+            stats["unique_judges"],
+            stats["unique_tournaments"],
+            stats["total_earnings"],
+        )
+        from aiogram.types import InputFile
+        await bot.send_document(
+            callback_query.from_user.id,
+            InputFile(bio, filename=filename),
+            caption=caption,
+            parse_mode="HTML",
+        )
     except SQLAlchemyError as e:
-        await bot.send_message(callback_query.from_user.id, f"❌ Ошибка при экспорте:\n{e}")
+        await bot.send_message(callback_query.from_user.id, "Ошибка экспорта: %s" % e)
     finally:
         session.close()
