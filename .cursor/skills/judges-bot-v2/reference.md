@@ -1367,7 +1367,8 @@ PATCH /me
 - `delete_tournament_step(callback_query)` L712
 - `process_delete_month(cb, state)` L732
 - `process_delete_tournament(cb, state)` L756
-- `process_delete_confirm(cb, state)` L769
+- `notify_tournament_deleted(bot, title, month, recipients)` — фоновая рассылка после удаления
+- `process_delete_confirm(cb, state)` — сразу отвечает админу, рассылку уводит в `asyncio.create_task`
 - `admin_sendall_action(callback_query)` L868
 - `process_sendall_message(message, state)` L879
 - `admin_review_registrations(callback_query)` L912
@@ -3097,6 +3098,8 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "")
+# Короткий таймаут: без него TCP к недоступному SMTP может висеть ~13 минут
+SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "15"))
 
 WEB_PORTAL_URL = os.getenv("WEB_PORTAL_URL", "https://festsfs.ru")
 
@@ -3163,12 +3166,12 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
 
     try:
         if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
                 if SMTP_USER and SMTP_PASSWORD:
                     server.login(SMTP_USER, SMTP_PASSWORD)
                 server.send_message(msg)
         else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
                 server.starttls()
                 if SMTP_USER and SMTP_PASSWORD:
                     server.login(SMTP_USER, SMTP_PASSWORD)
@@ -4389,9 +4392,49 @@ async def admin_earnings_request(
         db.close()
 
 
+async def _notify_tournament_deleted_background(
+    title: str,
+    month: str,
+    recipients: list[tuple[int, Optional[str]]],
+) -> None:
+    """Фоновая рассылка после DELETE /tournaments — не держит HTTP-ответ."""
+    msg = f"❗️ Турнир «{title}» ({month}) удалён админом."
+    if BOT_TOKEN:
+        from aiogram import Bot
+
+        bot = Bot(token=BOT_TOKEN)
+        try:
+            batch_size = 25
+            user_ids = [uid for uid, _ in recipients]
+            for index in range(0, len(user_ids), batch_size):
+                batch = user_ids[index:index + batch_size]
+                results = await asyncio.gather(
+                    *(bot.send_message(uid, msg) for uid in batch),
+                    return_exceptions=True,
+                )
+                for uid, result in zip(batch, results):
+                    if isinstance(result, Exception):
+                        logger.error("Notify delete to %s failed: %s", uid, result)
+                if index + batch_size < len(user_ids):
+                    await asyncio.sleep(1)
+        finally:
+            await bot.session.close()
+
+    from api.email_service import send_tournament_deleted_email
+
+    for uid, email in recipients:
+        if not email:
+            continue
+        try:
+            await asyncio.to_thread(send_tournament_deleted_email, email, title, month)
+        except Exception as e:
+            logger.exception("Email tournament deleted to %s (user %s): %s", email, uid, e)
+
+
 @router.delete("/tournaments/{tournament_id}", status_code=204)
 async def admin_delete_tournament(
     tournament_id: int,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_current_admin),
 ):
     db = SessionLocal()
@@ -4403,25 +4446,14 @@ async def admin_delete_tournament(
         month = t.month
         db.delete(t)
         db.commit()
-        users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
-        if BOT_TOKEN:
-            import asyncio
-            from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
-            msg = f"❗️ Турнир «{title}» ({month}) удалён админом."
-            for u in users:
-                try:
-                    await bot.send_message(u.user_id, msg)
-                    await asyncio.sleep(0.05)
-                except Exception:
-                    pass
-        for u in users:
-            if u.email:
-                try:
-                    from api.email_service import send_tournament_deleted_email
-                    send_tournament_deleted_email(u.email, title, month)
-                except Exception as e:
-                    logger.exception("Email tournament deleted to %s: %s", u.email, e)
+        recipients = [
+            (u.user_id, u.email)
+            for u in db.query(User).all()
+            if not getattr(u, "is_blocked", False)
+        ]
+        background_tasks.add_task(
+            _notify_tournament_deleted_background, title, month, recipients
+        )
         return
     finally:
         db.close()
@@ -7729,6 +7761,7 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
             if not t:
                 await cb.message.edit_text("❌ Турнир не найден.", reply_markup=None)
                 await state.finish()
+                await cb.answer()
                 return
             title = f"{t.date.strftime('%d.%m.%Y')} {t.name}"
             month = data.get('month', '')
@@ -7759,18 +7792,10 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                 
                 logger.info(f"Удален турнир {tournament_id}: платежей={payments_deleted}, регистраций={registrations_deleted}, бюджетов={budgets_deleted}")
 
-                # Уведомим всех (Telegram + email)
-                for u in session.query(User).all():
-                    try:
-                        await cb.message.bot.send_message(u.user_id, f"❗️ Турнир «{title}» ({month}) удалён админом.")
-                    except Exception as e:
-                        logger.error("Failed to notify user %s about tournament deletion: %s", u.user_id, e)
-                    if u.email:
-                        try:
-                            from api.email_service import send_tournament_deleted_email
-                            send_tournament_deleted_email(u.email, title, month)
-                        except Exception as e:
-                            logger.exception("Ошибка email об удалении турнира для %s: %s", u.email, e)
+                recipients = [
+                    (u.user_id, u.email)
+                    for u in session.query(User).filter(User.is_blocked == False).all()
+                ]
 
                 # Логируем действие
                 action_logger = get_action_logger()
@@ -7781,7 +7806,31 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                         {"tournament": title, "month": month}
                     )
 
+                # Сразу отвечаем админу; рассылку уводим в фон (иначе SMTP-таймауты блокируют часами)
                 await cb.message.edit_text(f"✅ Турнир «{title}» удалён.", reply_markup=None)
+                await state.finish()
+                await cb.answer()
+
+                bot = cb.bot
+                task = asyncio.create_task(
+                    notify_tournament_deleted(bot, title, month, recipients),
+                    name=f"notify-tournament-deleted-{tournament_id}",
+                )
+
+                def _log_notify_task_error(t: asyncio.Task) -> None:
+                    try:
+                        exc = t.exception()
+                    except asyncio.CancelledError:
+                        return
+                    if exc:
+                        logger.exception(
+                            "Фоновая рассылка об удалении турнира %s упала: %s",
+                            tournament_id,
+                            exc,
+                        )
+
+                task.add_done_callback(_log_notify_task_error)
+                return
                 
             except SQLAlchemyError as e:
                 session.rollback()

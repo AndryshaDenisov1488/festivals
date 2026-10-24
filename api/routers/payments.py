@@ -117,6 +117,12 @@ class ConfirmPaymentIn(BaseModel):
     confirm_non_standard: bool = False
 
 
+class CorrectEarningsIn(BaseModel):
+    payment_id: int
+    amount: float
+    confirm_non_standard: bool = False
+
+
 @router.post("/earnings/my/confirm")
 async def confirm_payment(
     payload: ConfirmPaymentIn,

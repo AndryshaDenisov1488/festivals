@@ -87,6 +87,33 @@ async def send_tournament_change_notification(bot, users, old_tournament, new_to
     await send_in_batches(bot, users, message)
 
 
+async def notify_tournament_deleted(bot, title: str, month: str, recipients: list[tuple[int, str | None]]):
+    """Фоновая рассылка об удалении турнира (Telegram + email). Не блокирует ответ админу."""
+    text = f"❗️ Турнир «{title}» ({month}) удалён админом."
+    user_ids = [uid for uid, _ in recipients]
+    batch_size = 25
+    for index in range(0, len(user_ids), batch_size):
+        batch = user_ids[index:index + batch_size]
+        results = await asyncio.gather(
+            *(bot.send_message(uid, text) for uid in batch),
+            return_exceptions=True,
+        )
+        for uid, result in zip(batch, results):
+            if isinstance(result, Exception):
+                logger.error("Failed to notify user %s about tournament deletion: %s", uid, result)
+        if index + batch_size < len(user_ids):
+            await asyncio.sleep(1)
+
+    from api.email_service import send_tournament_deleted_email
+    for uid, email in recipients:
+        if not email:
+            continue
+        try:
+            await asyncio.to_thread(send_tournament_deleted_email, email, title, month)
+        except Exception as e:
+            logger.exception("Ошибка email об удалении турнира для %s (user %s): %s", email, uid, e)
+
+
 # ========== /admin — Главное меню для админа ==========
 async def cmd_admin(message: types.Message, state: FSMContext):
     logger.info("[cmd_admin] called by user_id=%s", message.from_user.id)
@@ -795,6 +822,7 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
             if not t:
                 await cb.message.edit_text("❌ Турнир не найден.", reply_markup=None)
                 await state.finish()
+                await cb.answer()
                 return
             title = f"{t.date.strftime('%d.%m.%Y')} {t.name}"
             month = data.get('month', '')
@@ -825,18 +853,10 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                 
                 logger.info(f"Удален турнир {tournament_id}: платежей={payments_deleted}, регистраций={registrations_deleted}, бюджетов={budgets_deleted}")
 
-                # Уведомим всех (Telegram + email)
-                for u in session.query(User).filter(User.is_blocked == False).all():
-                    try:
-                        await cb.message.bot.send_message(u.user_id, f"❗️ Турнир «{title}» ({month}) удалён админом.")
-                    except Exception as e:
-                        logger.error("Failed to notify user %s about tournament deletion: %s", u.user_id, e)
-                    if u.email:
-                        try:
-                            from api.email_service import send_tournament_deleted_email
-                            await asyncio.to_thread(send_tournament_deleted_email, u.email, title, month)
-                        except Exception as e:
-                            logger.exception("Ошибка email об удалении турнира для %s: %s", u.email, e)
+                recipients = [
+                    (u.user_id, u.email)
+                    for u in session.query(User).filter(User.is_blocked == False).all()
+                ]
 
                 # Логируем действие
                 action_logger = get_action_logger()
@@ -847,7 +867,31 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
                         {"tournament": title, "month": month}
                     )
 
+                # Сразу отвечаем админу; рассылку уводим в фон (иначе SMTP-таймауты блокируют часами)
                 await cb.message.edit_text(f"✅ Турнир «{title}» удалён.", reply_markup=None)
+                await state.finish()
+                await cb.answer()
+
+                bot = cb.bot
+                task = asyncio.create_task(
+                    notify_tournament_deleted(bot, title, month, recipients),
+                    name=f"notify-tournament-deleted-{tournament_id}",
+                )
+
+                def _log_notify_task_error(t: asyncio.Task) -> None:
+                    try:
+                        exc = t.exception()
+                    except asyncio.CancelledError:
+                        return
+                    if exc:
+                        logger.exception(
+                            "Фоновая рассылка об удалении турнира %s упала: %s",
+                            tournament_id,
+                            exc,
+                        )
+
+                task.add_done_callback(_log_notify_task_error)
+                return
                 
             except SQLAlchemyError as e:
                 session.rollback()

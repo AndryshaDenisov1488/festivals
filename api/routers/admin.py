@@ -1,8 +1,9 @@
+import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
@@ -910,9 +911,49 @@ async def admin_earnings_request(
         db.close()
 
 
+async def _notify_tournament_deleted_background(
+    title: str,
+    month: str,
+    recipients: list[tuple[int, Optional[str]]],
+) -> None:
+    """Фоновая рассылка после DELETE /tournaments — не держит HTTP-ответ."""
+    msg = f"❗️ Турнир «{title}» ({month}) удалён админом."
+    if BOT_TOKEN:
+        from aiogram import Bot
+
+        bot = Bot(token=BOT_TOKEN)
+        try:
+            batch_size = 25
+            user_ids = [uid for uid, _ in recipients]
+            for index in range(0, len(user_ids), batch_size):
+                batch = user_ids[index:index + batch_size]
+                results = await asyncio.gather(
+                    *(bot.send_message(uid, msg) for uid in batch),
+                    return_exceptions=True,
+                )
+                for uid, result in zip(batch, results):
+                    if isinstance(result, Exception):
+                        logger.error("Notify delete to %s failed: %s", uid, result)
+                if index + batch_size < len(user_ids):
+                    await asyncio.sleep(1)
+        finally:
+            await bot.session.close()
+
+    from api.email_service import send_tournament_deleted_email
+
+    for uid, email in recipients:
+        if not email:
+            continue
+        try:
+            await asyncio.to_thread(send_tournament_deleted_email, email, title, month)
+        except Exception as e:
+            logger.exception("Email tournament deleted to %s (user %s): %s", email, uid, e)
+
+
 @router.delete("/tournaments/{tournament_id}", status_code=204)
 async def admin_delete_tournament(
     tournament_id: int,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_current_admin),
 ):
     db = SessionLocal()
@@ -924,25 +965,14 @@ async def admin_delete_tournament(
         month = t.month
         db.delete(t)
         db.commit()
-        users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
-        if BOT_TOKEN:
-            import asyncio
-            from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
-            msg = f"❗️ Турнир «{title}» ({month}) удалён админом."
-            for u in users:
-                try:
-                    await bot.send_message(u.user_id, msg)
-                    await asyncio.sleep(0.05)
-                except Exception:
-                    pass
-        for u in users:
-            if u.email:
-                try:
-                    from api.email_service import send_tournament_deleted_email
-                    send_tournament_deleted_email(u.email, title, month)
-                except Exception as e:
-                    logger.exception("Email tournament deleted to %s: %s", u.email, e)
+        recipients = [
+            (u.user_id, u.email)
+            for u in db.query(User).all()
+            if not getattr(u, "is_blocked", False)
+        ]
+        background_tasks.add_task(
+            _notify_tournament_deleted_background, title, month, recipients
+        )
         return
     finally:
         db.close()

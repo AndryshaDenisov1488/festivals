@@ -12,6 +12,8 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "")
+# Короткий таймаут: без него TCP к недоступному SMTP может висеть ~13 минут
+SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "15"))
 
 WEB_PORTAL_URL = os.getenv("WEB_PORTAL_URL", "https://festsfs.ru")
 
@@ -78,12 +80,12 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
 
     try:
         if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
                 if SMTP_USER and SMTP_PASSWORD:
                     server.login(SMTP_USER, SMTP_PASSWORD)
                 server.send_message(msg)
         else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
                 server.starttls()
                 if SMTP_USER and SMTP_PASSWORD:
                     server.login(SMTP_USER, SMTP_PASSWORD)
