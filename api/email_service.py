@@ -91,6 +91,9 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
                     server.login(SMTP_USER, SMTP_PASSWORD)
                 server.send_message(msg)
         logger.info("[SMTP] Email отправлен: %s -> %s", subject[:50], to)
+    except (TimeoutError, OSError, smtplib.SMTPException) as e:
+        # Сетевые/SMTP сбои — ожидаемы; не logger.exception (иначе errmon орёт на каждый таймаут).
+        logger.warning("[SMTP] Не отправлено на %s (%s): %s", to, type(e).__name__, e)
     except Exception as e:
         logger.exception("[SMTP] Ошибка отправки email на %s: %s", to, e)
 
