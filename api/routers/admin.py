@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus, JudgePayment, RegistrationCancellation
-from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
+from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN, TELEGRAM_PROXY
 from api.dependencies import get_current_admin
 from api.utils import format_date, filter_by_search
 from utils.date_utils import get_today
@@ -80,7 +80,7 @@ async def broadcast(
     if not BOT_TOKEN or not payload.message:
         raise HTTPException(status_code=400, detail="Invalid request")
     from aiogram import Bot
-    bot = Bot(token=BOT_TOKEN)
+    bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
     db = SessionLocal()
     try:
         users = db.query(User).all()
@@ -262,7 +262,7 @@ async def _notify_judge_approve(user_id: int, tournament_name: str, tournament_d
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             user_id,
             f"✅ Вы утверждены для судейства турнира <b>{tournament_date} {tournament_name}</b>!",
@@ -281,7 +281,7 @@ async def _notify_judge_reject(user_id: int, tournament_name: str, tournament_da
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             user_id,
             f"❌ Ваша заявка на судейство турнира <b>{tournament_date} {tournament_name}</b> отклонена.",
@@ -599,7 +599,7 @@ async def admin_create_tournament(
             try:
                 from aiogram import Bot
                 import asyncio
-                bot = Bot(token=BOT_TOKEN)
+                bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
                 for u in users:
                     try:
                         await bot.send_message(u.user_id, f"🆕 Добавлен турнир <b>{formatted}</b> в <b>{t.month}</b>.", parse_mode="HTML")
@@ -654,7 +654,7 @@ async def _notify_tournament_change(
         users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
         if BOT_TOKEN:
             from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
+            bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
             message = (
                 "🔄 <b>Турнир изменён</b>\n\n"
                 f"🏆 <b>Турнир:</b> {new_date.strftime('%d.%m.%Y')} {new_name}\n\n"
@@ -874,7 +874,7 @@ async def admin_earnings_request(
             return {"sent": 0, "message": "Все суммы уже указаны"}
         import asyncio
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY) if BOT_TOKEN else None
         sent = 0
         for user_id, items in by_user.items():
             user = items[0][0]
@@ -921,7 +921,7 @@ async def _notify_tournament_deleted_background(
     if BOT_TOKEN:
         from aiogram import Bot
 
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         try:
             batch_size = 25
             user_ids = [uid for uid, _ in recipients]

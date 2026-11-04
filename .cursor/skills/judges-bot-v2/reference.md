@@ -2531,6 +2531,7 @@ sudo systemctl start judges-bot judges-api
 BOT_TOKEN=...
 ADMIN_IDS=123456789
 CHANNEL_ID=-100...
+# TELEGRAM_PROXY=http://10.200.0.2:8888  # если api.telegram.org недоступен напрямую (сервер 5.129.221.244)
 # DATABASE_URL можно не указывать — по умолчанию bot_database.db в корне проекта
 
 # Для входа в веб (SMTP)
@@ -3522,7 +3523,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_
 from database import SessionLocal
 from models import User, Tournament, Registration, RegistrationStatus, JudgePayment, RegistrationCancellation
-from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN
+from config import ADMIN_IDS, MAX_JUDGES_PER_TOURNAMENT, BOT_TOKEN, TELEGRAM_PROXY
 from api.dependencies import get_current_admin
 from api.utils import format_date, filter_by_search
 from utils.date_utils import get_today
@@ -3592,7 +3593,7 @@ async def broadcast(
     if not BOT_TOKEN or not payload.message:
         raise HTTPException(status_code=400, detail="Invalid request")
     from aiogram import Bot
-    bot = Bot(token=BOT_TOKEN)
+    bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
     db = SessionLocal()
     try:
         users = db.query(User).all()
@@ -3760,7 +3761,7 @@ async def _notify_judge_approve(user_id: int, tournament_name: str, tournament_d
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             user_id,
             f"✅ Вы утверждены для судейства турнира <b>{tournament_date} {tournament_name}</b>!",
@@ -3779,7 +3780,7 @@ async def _notify_judge_reject(user_id: int, tournament_name: str, tournament_da
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             user_id,
             f"❌ Ваша заявка на судейство турнира <b>{tournament_date} {tournament_name}</b> отклонена.",
@@ -4080,7 +4081,7 @@ async def admin_create_tournament(
             try:
                 from aiogram import Bot
                 import asyncio
-                bot = Bot(token=BOT_TOKEN)
+                bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
                 for u in users:
                     try:
                         await bot.send_message(u.user_id, f"🆕 Добавлен турнир <b>{formatted}</b> в <b>{t.month}</b>.", parse_mode="HTML")
@@ -4135,7 +4136,7 @@ async def _notify_tournament_change(
         users = [u for u in db.query(User).all() if not getattr(u, "is_blocked", False)]
         if BOT_TOKEN:
             from aiogram import Bot
-            bot = Bot(token=BOT_TOKEN)
+            bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
             message = (
                 "🔄 <b>Турнир изменён</b>\n\n"
                 f"🏆 <b>Турнир:</b> {new_date.strftime('%d.%m.%Y')} {new_name}\n\n"
@@ -4355,7 +4356,7 @@ async def admin_earnings_request(
             return {"sent": 0, "message": "Все суммы уже указаны"}
         import asyncio
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY) if BOT_TOKEN else None
         sent = 0
         for user_id, items in by_user.items():
             user = items[0][0]
@@ -4402,7 +4403,7 @@ async def _notify_tournament_deleted_background(
     if BOT_TOKEN:
         from aiogram import Bot
 
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         try:
             batch_size = 25
             user_ids = [uid for uid, _ in recipients]
@@ -4754,7 +4755,7 @@ def export_month(
     from aiogram import Bot
     from config import BOT_TOKEN
 
-    bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
+    bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY) if BOT_TOKEN else None
     buffer = BytesIO()
     # export_data expects callback with bot - we need sync version
     # For now return placeholder; full impl would use export logic from excel_export
@@ -5015,7 +5016,7 @@ from database import SessionLocal
 from models import Registration, Tournament, User
 from utils.registration_cancellation import record_registration_cancellation
 from models import RegistrationStatus
-from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
+from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL, TELEGRAM_PROXY
 from api.dependencies import get_current_user, get_db
 from api.utils import format_date, filter_by_search
 
@@ -5078,7 +5079,7 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             CHANNEL_ID,
             "🔔 <b>Новая заявка</b>\n"
@@ -5100,7 +5101,7 @@ async def _notify_channel_cancel_registration(user_name: str, tournament_str: st
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             CHANNEL_ID,
             "❌ <b>Заявка отменена</b>\n"
@@ -5626,6 +5627,7 @@ load_dotenv()
 
 # Telegram Bot Token
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "").strip() or None
 # Список админов (ID через запятую в .env)
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
 # Канал или чат для уведомлений (например, "-1001234567890" или "@your_channel")
@@ -6762,7 +6764,7 @@ async def force_send_reminders():
     from config import BOT_TOKEN
     from aiogram import Bot
     
-    bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+    bot = Bot(token=BOT_TOKEN, parse_mode="HTML", proxy=TELEGRAM_PROXY)
     
     session = SessionLocal()
     try:
@@ -11236,7 +11238,7 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 # ========== Бот/Диспетчер ==========
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML", proxy=TELEGRAM_PROXY)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
@@ -14016,7 +14018,7 @@ async def send_old_payment_reminders():
     print("=" * 60)
     
     # Создаем бота
-    bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+    bot = Bot(token=BOT_TOKEN, parse_mode="HTML", proxy=TELEGRAM_PROXY)
     
     session = SessionLocal()
     try:
@@ -17914,7 +17916,7 @@ async def test_channel_notification() -> None:
     try:
         from aiogram import Bot
 
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             CHANNEL_ID,
             "🧪 <b>Тест уведомлений</b>\n"

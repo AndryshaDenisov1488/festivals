@@ -88,6 +88,11 @@ journalctl -u judges-bot -f
 
 Если пользователь явно просит не пушить — только тогда пропустить push.
 
+## Изменения 2026-11-04
+
+- Переезд на VPS 5.129.221.244 (`/opt/judges_bot_v2`, user `judges`, Python 3.11 из `/opt/uv-python`). Оттуда api.telegram.org напрямую недоступен.
+- `TELEGRAM_PROXY` в `.env` — прокси для всех `Bot(...)` (бот и API). На сервере: `http://10.200.0.2:8888` (tinyproxy в netns cursorvpn).
+
 ## Изменения 2026-10-24
 
 - Удаление турнира больше не ждёт рассылку: админ получает `✅` сразу, Telegram+email уходят в фон (`notify_tournament_deleted` / FastAPI `BackgroundTasks`).

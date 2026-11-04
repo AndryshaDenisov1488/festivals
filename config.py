@@ -6,6 +6,8 @@ load_dotenv()
 
 # Telegram Bot Token
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+# Прокси до api.telegram.org (напр. http://10.200.0.2:8888), если Telegram недоступен напрямую
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "").strip() or None
 # Список админов (ID через запятую в .env)
 ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
 

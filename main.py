@@ -11,7 +11,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.handler import CancelHandler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, TELEGRAM_PROXY
 from database import engine, SessionLocal
 from models import Base, Registration, Tournament, RegistrationStatus, User
 from utils.error_monitor import init_error_monitor, get_error_monitor
@@ -96,7 +96,7 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 # ========== Бот/Диспетчер ==========
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML", proxy=TELEGRAM_PROXY)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 

@@ -9,7 +9,7 @@ from database import SessionLocal
 from models import Registration, Tournament, User
 from utils.registration_cancellation import record_registration_cancellation
 from models import RegistrationStatus
-from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL
+from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL, TELEGRAM_PROXY
 from api.dependencies import get_current_user, get_db
 from api.utils import format_date, filter_by_search
 from utils.season import get_current_season_key, get_season_date_range, normalize_season_param
@@ -80,7 +80,7 @@ async def _notify_channel_new_registration(user_name: str, tournament_str: str) 
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             CHANNEL_ID,
             "🔔 <b>Новая заявка</b>\n"
@@ -102,7 +102,7 @@ async def _notify_channel_cancel_registration(user_name: str, tournament_str: st
         return
     try:
         from aiogram import Bot
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, proxy=TELEGRAM_PROXY)
         await bot.send_message(
             CHANNEL_ID,
             "❌ <b>Заявка отменена</b>\n"
