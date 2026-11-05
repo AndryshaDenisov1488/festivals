@@ -61,12 +61,12 @@ def _base_html(title: str, content: str, accent_color: str = "#0f172a") -> str:
 """
 
 
-def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> None:
+def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> bool:
     if not SMTP_HOST or not SMTP_FROM:
         logger.warning(
             "[SMTP] Email не отправлен: SMTP не настроен. Добавьте в .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM"
         )
-        return
+        return False
 
     logger.info("[SMTP] Отправка письма: %s -> %s", subject[:50], to)
     msg = EmailMessage()
@@ -91,14 +91,16 @@ def send_email(to: str, subject: str, text: str, html: Optional[str] = None) -> 
                     server.login(SMTP_USER, SMTP_PASSWORD)
                 server.send_message(msg)
         logger.info("[SMTP] Email отправлен: %s -> %s", subject[:50], to)
+        return True
     except (TimeoutError, OSError, smtplib.SMTPException) as e:
         # Сетевые/SMTP сбои — ожидаемы; не logger.exception (иначе errmon орёт на каждый таймаут).
         logger.warning("[SMTP] Не отправлено на %s (%s): %s", to, type(e).__name__, e)
     except Exception as e:
         logger.exception("[SMTP] Ошибка отправки email на %s: %s", to, e)
+    return False
 
 
-def send_login_code_email(email: str, code: str) -> None:
+def send_login_code_email(email: str, code: str) -> bool:
     subject = "Код входа на портал судей"
     text = (
         "Ваш код для входа на портал судей:\n\n"
@@ -117,7 +119,7 @@ def send_login_code_email(email: str, code: str) -> None:
       </p>
     """
     html = _base_html("Код входа", content)
-    send_email(email, subject, text, html)
+    return send_email(email, subject, text, html)
 
 
 def send_registration_approved_email(email: str, tournament_name: str, tournament_date: str) -> None:

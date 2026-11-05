@@ -4,6 +4,7 @@ import random
 import string
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from models import User
 from api.schemas.auth import AuthRequestCodeIn, AuthVerifyCodeIn, AuthLoginIn, AuthSetPasswordIn, AuthChangePasswordIn, TokenOut
 from api.dependencies import JWT_SECRET, JWT_ALGORITHM, get_current_user
 from api.email_service import send_login_code_email
+from api.recovery_page import RECOVERY_HTML
 
 
 router = APIRouter()
@@ -47,8 +49,9 @@ def request_code(payload: AuthRequestCodeIn):
         user.email_verification_expires_at = now + timedelta(minutes=15)
         db.commit()
 
+        if not send_login_code_email(user.email, code):
+            raise HTTPException(status_code=503, detail="Не удалось отправить письмо. Попробуйте позже.")
         logger.info("[AUTH] request-code: код отправлен user_id=%s email=%s", user.user_id, email)
-        send_login_code_email(user.email, code)
         return
     finally:
         db.close()
@@ -79,6 +82,21 @@ def verify_code(payload: AuthVerifyCodeIn):
         if getattr(user, "is_blocked", False):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт заблокирован")
 
+        # Compare-and-clear in one statement: concurrent uses cannot replay a code.
+        consumed = db.query(User).filter(
+            User.user_id == user.user_id,
+            User.email == email,
+            User.email_verification_code == payload.code,
+            User.is_blocked.is_(False),
+        ).update({
+            User.email_verified: True,
+            User.email_verification_code: None,
+            User.email_verification_expires_at: None,
+        }, synchronize_session=False)
+        if consumed != 1:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Code already used")
+        db.commit()
         logger.info("[AUTH] verify-code: успешный вход user_id=%s email=%s", user.user_id, email)
         token_data = {"user_id": user.user_id, "exp": now + timedelta(hours=12)}
         access_token = jwt.encode(token_data, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -86,6 +104,18 @@ def verify_code(payload: AuthVerifyCodeIn):
         return TokenOut(access_token=access_token)
     finally:
         db.close()
+
+
+@router.get("/recover-email", response_class=HTMLResponse)
+def recover_email():
+    # Fragment credentials stay in the browser, outside HTTP access logs.
+    # GET is harmless: link scanners cannot consume a user's recovery token.
+    return HTMLResponse(RECOVERY_HTML, headers={
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Frame-Options": "DENY",
+        "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    })
 
 
 @router.post("/login", response_model=TokenOut)

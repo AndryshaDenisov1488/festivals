@@ -264,7 +264,8 @@ async def process_link_email_input(message: types.Message, state: FSMContext):
         user.email_verification_expires_at = now + timedelta(minutes=15)
         session.commit()
 
-        await asyncio.to_thread(send_login_code_email, email, code)
+        if not await asyncio.to_thread(send_login_code_email, email, code):
+            raise RuntimeError("Не удалось отправить письмо с кодом")
         await state.update_data(email=email)
         await LinkEmail.waiting_for_code.set()
         await message.answer(

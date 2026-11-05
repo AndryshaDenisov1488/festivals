@@ -771,6 +771,31 @@ e992816 фикс
 
 # ЧАСТЬ XI. ОПЕРАЦИИ
 
+## Восстановление почты 2026-11-06
+
+SMTP для фестивалей: SSL 465, mailbox `info@ffkm.ru`, From display name
+«фестивальчики». Credentials остаются только в `.env` (не Git).
+`api.email_service.send_email` и `send_login_code_email` возвращают bool;
+ошибки SMTP дают пользователю ошибку, API request-code возвращает 503.
+Verify-code атомарно очищает использованный код и expiry, выставляет
+email_verified=True; повторное предъявление не авторизует.
+`api/recovery_page.py` содержит страницу `GET /api/v1/auth/recover-email`:
+email/code передаются только URL fragment, удаляются из адресной строки;
+GET ничего не подтверждает. Кнопка вызывает POST verify-code и сохраняет
+обычный 12-часовой JWT в localStorage на том же origin.
+
+`python -m maintenance.recover_email_20261106 --user-ids <IDs from failed request logs>
+--receipt <off-Git JSON path>` — dry-run; `--send` явно включает отправку.
+Перед отправкой: свежий verified SQLite backup и config backup, тест на копии.
+Только pending, unblocked, unverified пользователи с сохранённым кодом.
+Новый 120-битный random token (20 символов) заменяет старый код, expiry=NULL;
+ссылка бессрочна до первого использования или нового запроса. При SMTP failure
+восстановление прежнего кода условное, не затирает параллельный новый код.
+Receipt предотвращает повторную отправку успешным адресатам при штатном rerun;
+после аварии между SMTP accept и записью receipt нужно вручную сверить почту.
+Не логировать ссылки, коды и SMTP password. Рассылать только адресатам,
+подтверждённым логами запроса и актуальным состоянием базы.
+
 ## Перезапуск данных 2026-11-05
 
 Текущий production: `root@5.129.221.244:2222`, checkout `/opt/judges_bot_v2`,

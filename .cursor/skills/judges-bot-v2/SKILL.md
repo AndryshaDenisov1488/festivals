@@ -93,6 +93,13 @@ journalctl -u judges-bot -f
 - Переезд на VPS 5.129.221.244 (`/opt/judges_bot_v2`, user `judges`, Python 3.11 из `/opt/uv-python`). Оттуда api.telegram.org напрямую недоступен.
 - `TELEGRAM_PROXY` в `.env` — прокси для всех `Bot(...)` (бот и API). На сервере: `http://10.200.0.2:8888` (tinyproxy в netns cursorvpn).
 
+## Изменения 2026-11-06
+
+- SMTP: `info@ffkm.ru`, SSL 465, имя отправителя «фестивальчики»; credentials только в production `.env`.
+- `send_email` / `send_login_code_email` возвращают bool; бот и API больше не сообщают об успешной отправке при SMTP failure.
+- Восстановление недоставленных запросов: `maintenance/recover_email_20261106.py`, по умолчанию dry-run. Одноразовая ссылка без TTL с 120-битным токеном в URL fragment; `/api/v1/auth/recover-email` подтверждает только по нажатию кнопки через POST verify-code. Новый запрос заменяет ссылку.
+- Успешный verify-code подтверждает адрес и атомарно погашает код. Заблокированным доступ запрещён.
+
 ## Изменения 2026-10-24
 
 - Удаление турнира больше не ждёт рассылку: админ получает `✅` сразу, Telegram+email уходят в фон (`notify_tournament_deleted` / FastAPI `BackgroundTasks`).
