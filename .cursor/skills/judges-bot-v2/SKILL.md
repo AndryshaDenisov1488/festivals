@@ -24,7 +24,7 @@ description: >-
 
 | | |
 |--|--|
-| Путь | `/root/judges_bot_v2` |
+| Путь | `/opt/judges_bot_v2` (новый сервер `5.129.221.244:2222`, пользователь сервиса `judges`) |
 | URL | https://festsfs.ru |
 | Порт | 3000 (Next.js), 8101 (API) |
 | БД | SQLite: bot_database.db |
