@@ -95,6 +95,8 @@ journalctl -u judges-bot -f
 
 ## Изменения 2026-11-06
 
+- После commit нового профиля и подтверждения регистрации бот отправляет в `CHANNEL_ID` имя, функцию, категорию, Telegram ID/username. Повторный `/start` или обновление профиля не уведомляет; ошибки Telegram не отменяют регистрацию.
+
 - SMTP: `info@ffkm.ru`, SSL 465, имя отправителя «фестивальчики»; credentials только в production `.env`.
 - `send_email` / `send_login_code_email` возвращают bool; бот и API больше не сообщают об успешной отправке при SMTP failure.
 - Восстановление недоставленных запросов: `maintenance/recover_email_20261106.py`, по умолчанию dry-run. Одноразовая ссылка без TTL с 120-битным токеном в URL fragment; `/api/v1/auth/recover-email` подтверждает только по нажатию кнопки через POST verify-code. Новый запрос заменяет ссылку.

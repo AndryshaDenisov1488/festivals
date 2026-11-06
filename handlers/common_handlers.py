@@ -7,7 +7,8 @@ from models import User
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from states import RegisterReferee
 from keyboards import main_menu
-from config import ADMIN_IDS
+from config import ADMIN_IDS, CHANNEL_ID
+from services.user_notifications import notify_new_user
 from aiogram.types import ParseMode
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,7 @@ async def process_category(message: types.Message, state: FSMContext):
     session = SessionLocal()
     try:
         user_in_db = session.query(User).filter(User.user_id == message.from_user.id).first()
+        is_new_user = user_in_db is None
         if not user_in_db:
             user_in_db = User(
                 user_id=message.from_user.id,
@@ -220,6 +222,8 @@ async def process_category(message: types.Message, state: FSMContext):
         menu_manager = get_menu_manager()
         menu_manager.set_user_context(message.from_user.id, "user")
         await message.answer("✅ Вы успешно зарегистрированы! 🎉", reply_markup=main_menu())
+        if is_new_user:
+            await notify_new_user(message.bot, CHANNEL_ID, user_in_db, message.from_user.username)
 
     except SQLAlchemyError as e:
         session.rollback()
