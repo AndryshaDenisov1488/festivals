@@ -13,6 +13,7 @@ from config import MAX_JUDGES_PER_TOURNAMENT, CHANNEL_ID, ADMIN_EMAIL, TELEGRAM_
 from api.dependencies import get_current_user, get_db
 from api.utils import format_date, filter_by_search
 from utils.season import get_current_season_key, get_season_date_range, normalize_season_param
+from utils.date_utils import get_today
 
 
 router = APIRouter()
@@ -136,6 +137,8 @@ async def create_registration(
     tournament = db.query(Tournament).filter(Tournament.tournament_id == payload.tournament_id).first()
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
+    if tournament.date < get_today():
+        raise HTTPException(status_code=400, detail="Фестиваль уже прошёл. Запись на него закрыта.")
 
     existing = db.query(Registration).filter(
         Registration.user_id == user.user_id,

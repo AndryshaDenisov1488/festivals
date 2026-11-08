@@ -20,7 +20,7 @@ from utils.calendar import build_calendar, prev_month, next_month  # <- твой
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from services.payment_rules import is_special_judge
-from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month
+from utils.date_utils import sort_month_names, SEASON_MONTHS, month_name_to_year_month, get_today
 from utils.season import (
     get_active_tournament_date_range,
     get_current_season_key,
@@ -967,7 +967,11 @@ async def process_sendall_message(message: types.Message, state: FSMContext):
 async def admin_review_registrations(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end),
+            Tournament.date >= get_today(),
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
             await callback_query.message.answer("❌ Нет доступных турниров.")
@@ -993,6 +997,7 @@ async def admin_review_tournaments_in_month(callback_query: types.CallbackQuery)
         tournaments = session.query(Tournament).filter(
             Tournament.month == selected_month,
             Tournament.date.between(season_start, season_end),
+            Tournament.date >= get_today(),
         ).order_by(Tournament.date).all()
         if not tournaments:
             await callback_query.message.answer(f"❌ Нет турниров в {selected_month}.")
@@ -1017,6 +1022,10 @@ async def process_review_tournament(callback_query: types.CallbackQuery):
     tournament_id = int(callback_query.data.split('_')[-1])
     session = SessionLocal()
     try:
+        tournament = session.query(Tournament).filter(Tournament.tournament_id == tournament_id).first()
+        if not tournament or tournament.date < get_today():
+            await callback_query.message.answer("ℹ️ Фестиваль уже прошёл или удалён. Выберите актуальный фестиваль.")
+            return
         registrations = session.query(Registration).options(joinedload(Registration.user)).join(User).filter(
             Registration.tournament_id == tournament_id,
             Registration.status == RegistrationStatus.PENDING

@@ -18,7 +18,7 @@ from services.excel_export import split_text
 from utils.error_monitor import get_error_monitor
 from utils.action_logger import get_action_logger, ActionType
 from services.payment_rules import is_special_judge
-from utils.date_utils import sort_month_names, sort_by_tournament_date
+from utils.date_utils import sort_month_names, sort_by_tournament_date, get_today
 from utils.season import get_active_tournament_date_range
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 
@@ -342,7 +342,8 @@ async def process_sign_up(callback_query: types.CallbackQuery):
     try:
         season_start, season_end = get_active_tournament_date_range()
         months_raw = session.query(Tournament.month).filter(
-            Tournament.date.between(season_start, season_end)
+            Tournament.date.between(season_start, season_end),
+            Tournament.date >= get_today(),
         ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
         if not months:
@@ -372,6 +373,7 @@ async def process_month(callback_query: types.CallbackQuery):
         tournaments = session.query(Tournament).filter(
             Tournament.month == selected_month,
             Tournament.date.between(season_start, season_end),
+            Tournament.date >= get_today(),
         ).order_by(Tournament.date).all()
         if tournaments:
             keyboard = InlineKeyboardMarkup(row_width=1)
@@ -409,6 +411,9 @@ async def process_tournament(callback_query: types.CallbackQuery):
             await callback_query.message.answer("❌ Ошибка записи на турнир.")
             return
         if user.is_blocked:
+            return
+        if tournament.date < get_today():
+            await callback_query.message.answer("❌ Фестиваль уже прошёл. Запись на него закрыта.")
             return
 
         existing_registration = session.query(Registration).filter(
