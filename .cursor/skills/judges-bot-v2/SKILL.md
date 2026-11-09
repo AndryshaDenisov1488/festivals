@@ -95,6 +95,8 @@ journalctl -u judges-bot -f
 
 ## Изменения 2026-11-09
 
+- Проверка связи ускорена до20сек, после старта tinyproxy до4 проб готовности с паузой1сек; service timeout240. Cooldown180 сохранён от частых переподключений. Это сокращает обнаружение сбоя, но не гарантирует отсутствие разрывов у VPN-провайдера.
+
 - `deploy/vpn_healthcheck.py` + `judges-vpn-health.service/.timer`: проверка Telegram через существующий VPN-прокси раз в минуту. После двух ошибок переподключает cursorvpn/tinyproxy, не перезапуская бота; cooldown 180 сек, intentional stop бота учитывается. State `/var/lib/judges-vpn-health`, ключ VPN вне Git.
 
 ## Изменения 2026-11-08

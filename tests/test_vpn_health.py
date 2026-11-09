@@ -52,3 +52,20 @@ def test_failed_restart_has_persisted_cooldown(tmp_path):
     health.check(state,run,now=1060)
     health.check(state,run,now=1120)
     assert sum('restart' in c for c in calls)==1
+
+
+def test_waits_for_proxy_to_listen_after_start(tmp_path):
+    calls=[]
+    results=iter([False, False, False, True])
+    sleeps=[]
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[0]=='curl':
+            ok=next(results)
+            return SimpleNamespace(returncode=0 if ok else 7,stdout='302' if ok else '')
+        return SimpleNamespace(returncode=0)
+    state=tmp_path/'state.json'
+    health.check(state,run,now=1000)
+    assert health.check(state,run,now=1060,sleep=sleeps.append)=='recovered'
+    assert sleeps==[1]
+    assert sum('restart' in c for c in calls)==1

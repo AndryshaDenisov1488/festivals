@@ -20,7 +20,7 @@ def reachable(run):
         return False
 
 
-def check(state_path, run=subprocess.run, now=None):
+def check(state_path, run=subprocess.run, now=None, sleep=time.sleep):
     now = time.time() if now is None else now
     # Respect intentional shutdown of the bot.
     if run(['systemctl', 'is-active', '--quiet', 'judges-bot'], timeout=10).returncode != 0:
@@ -42,7 +42,15 @@ def check(state_path, run=subprocess.run, now=None):
                                              ('restart', 'cursorvpn', 30),
                                              ('start', 'tinyproxy-cursorvpn', 90)]:
                 run(['systemctl', operation, unit], check=True, timeout=timeout)
-            status = 'recovered' if reachable(run) else 'recovery_failed'
+            # Type=simple reports started before tinyproxy binds its socket.
+            # Give it time to listen and finish DNS/TLS rather than report failure.
+            status = 'recovery_failed'
+            for attempt in range(4):
+                if reachable(run):
+                    status = 'recovered'
+                    break
+                if attempt < 3:
+                    sleep(1)
         except (OSError, subprocess.SubprocessError) as exc:
             log.error('VPN recovery failed: %s', type(exc).__name__)
             status = 'recovery_failed'
