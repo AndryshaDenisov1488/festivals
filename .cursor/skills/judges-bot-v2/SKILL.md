@@ -93,6 +93,10 @@ journalctl -u judges-bot -f
 - Переезд на VPS 5.129.221.244 (`/opt/judges_bot_v2`, user `judges`, Python 3.11 из `/opt/uv-python`). Оттуда api.telegram.org напрямую недоступен.
 - `TELEGRAM_PROXY` в `.env` — прокси для всех `Bot(...)` (бот и API). На сервере: `http://10.200.0.2:8888` (tinyproxy в netns cursorvpn).
 
+## Изменения 2026-11-09
+
+- `deploy/vpn_healthcheck.py` + `judges-vpn-health.service/.timer`: проверка Telegram через существующий VPN-прокси раз в минуту. После двух ошибок переподключает cursorvpn/tinyproxy, не перезапуская бота; cooldown 180 сек, intentional stop бота учитывается. State `/var/lib/judges-vpn-health`, ключ VPN вне Git.
+
 ## Изменения 2026-11-08
 
 - «Рассмотреть заявки» и запись судей показывают только фестивали текущего сезона с датой >= сегодня по Москве; прошедшие скрыты также из выбора месяцев. Старые кнопки записи/рассмотрения защищены, API не создаёт заявки на прошлые даты. Сегодняшние доступны. Архив и статистика сохраняются.

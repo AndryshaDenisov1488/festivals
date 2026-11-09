@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Judges Telegram connection every minute
+
+[Timer]
+OnBootSec=60
+OnUnitInactiveSec=60
+AccuracySec=5
+Unit=judges-vpn-health.service
+
+[Install]
+WantedBy=timers.target

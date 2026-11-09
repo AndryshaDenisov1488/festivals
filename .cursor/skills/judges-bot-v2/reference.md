@@ -771,6 +771,26 @@ e992816 фикс
 
 # ЧАСТЬ XI. ОПЕРАЦИИ
 
+## Контроль VPN 2026-11-09
+
+Служба VPN может оставаться active при неработающем туннеле. Проверка
+`deploy/vpn_healthcheck.py` раз в минуту проверяет HTTPS api.telegram.org через
+10.200.0.2:8888. После двух ошибок: stop tinyproxy-cursorvpn, restart cursorvpn,
+start tinyproxy-cursorvpn. Бот не рестартует, FSM и queued updates сохраняются.
+Не запускается восстановление, если judges-bot намеренно остановлен.
+Между recovery минимум180сек, flock исключает параллельные recovery.
+State/cooldown сохраняется в `/var/lib/judges-vpn-health/state.json` (root600).
+
+Установка после backup БД и текущих VPN units/config/scripts:
+`install -m 755 deploy/vpn_healthcheck.py /usr/local/sbin/judges-vpn-health`;
+установить service/timer из deploy в /etc/systemd/system, daemon-reload,
+`systemctl enable --now judges-vpn-health.timer` и `systemctl start judges-vpn-health`.
+Проверить journal, next timer, HTTPS, Telegram pending updates без getUpdates
+конкуренции. Rollback: disable --now timer, дождаться/остановить health service,
+убрать только его units/script; VPN config/БД не восстанавливать поверх новых данных.
+Приватный VPN config остаётся `/root/cursor.conf`, не Git. Backup перед установкой:
+`/root/backups/judges/vpn-watchdog-20261109/`.
+
 ## Прошедшие фестивали (2026-11-08)
 
 Бот фильтрует месяц/фестиваль в «Рассмотреть заявки» и «Записаться» по текущему

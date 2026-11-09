@@ -1,0 +1,9 @@
+[Unit]
+Description=Check Telegram connectivity and recover Judges VPN
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/judges-vpn-health
+TimeoutStartSec=180
+UMask=0077
