@@ -773,7 +773,7 @@ e992816 фикс
 
 ## Переезд и фильтры сезона 2026-11-14
 
-Production теперь `root@31.128.41.221:22`, `/opt/judges_bot_v2`, runtime user judges,
+Production теперь `root@31.128.41.221:2222`, `/opt/judges_bot_v2`, runtime user judges,
 юниты judges-bot/api/web. Старый5.129.221.244 не использовать для релизов.
 Удаление турниров в боте (месяц/список/подтверждение) и «Кто ещё едет на фест»
 (месяц/список/старая кнопка) ограничены get_active_tournament_date_range.
