@@ -33,6 +33,11 @@ def get_active_tournament_date_range(ref: Optional[date] = None) -> tuple[date, 
     return start, end
 
 
+def is_active_tournament_date(day: date) -> bool:
+    start, end = get_active_tournament_date_range()
+    return start <= day <= end
+
+
 def normalize_season_param(season: Optional[str]) -> Optional[str]:
     """None / 'all' — без фильтра; иначе ключ сезона или текущий сезон."""
     if not season or season == "all":

@@ -757,7 +757,10 @@ async def process_export_year(callback_query: types.CallbackQuery):
 async def delete_tournament_step(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
-        months_raw = session.query(Tournament.month).distinct().all()
+        season_start, season_end = get_active_tournament_date_range()
+        months_raw = session.query(Tournament.month).filter(
+            Tournament.date.between(season_start, season_end)
+        ).distinct().all()
         months = sort_month_names(m[0] for m in months_raw if m[0])
     finally:
         session.close()
@@ -779,7 +782,11 @@ async def process_delete_month(cb: types.CallbackQuery, state: FSMContext):
     await state.update_data(month=month)
     session = SessionLocal()
     try:
-        tours = session.query(Tournament).filter(Tournament.month == month).order_by(Tournament.date).all()
+        season_start, season_end = get_active_tournament_date_range()
+        tours = session.query(Tournament).filter(
+            Tournament.month == month,
+            Tournament.date.between(season_start, season_end),
+        ).order_by(Tournament.date).all()
     finally:
         session.close()
 
@@ -821,6 +828,12 @@ async def process_delete_confirm(cb: types.CallbackQuery, state: FSMContext):
             t = session.query(Tournament).get(data['tournament_id'])
             if not t:
                 await cb.message.edit_text("❌ Турнир не найден.", reply_markup=None)
+                await state.finish()
+                await cb.answer()
+                return
+            from utils.season import is_active_tournament_date
+            if not is_active_tournament_date(t.date):
+                await cb.message.edit_text("❌ Турнир относится к архивному сезону. Удаление недоступно.", reply_markup=None)
                 await state.finish()
                 await cb.answer()
                 return

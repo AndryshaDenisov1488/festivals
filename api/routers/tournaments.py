@@ -9,6 +9,7 @@ from models import Tournament, Registration, RegistrationStatus, User
 from api.dependencies import get_db, get_current_user
 from api.utils import format_date, filter_by_search
 from utils.date_utils import get_today
+from utils.season import get_active_tournament_date_range, get_season_date_range, normalize_season_param
 
 
 router = APIRouter()
@@ -25,10 +26,17 @@ def list_tournaments(
         False,
         description="Только турниры, на которые текущий пользователь утверждён (для «кто на фест»)",
     ),
+    season: Optional[str] = Query(None, description="По умолчанию текущий сезон; all — явный архив"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     q = db.query(Tournament)
+    if season is None:
+        start, end = get_active_tournament_date_range()
+    else:
+        start, end = get_season_date_range(normalize_season_param(season))
+    if start is not None and end is not None:
+        q = q.filter(Tournament.date.between(start, end))
     if my_approved_only:
         q = q.filter(
             Tournament.tournament_id.in_(

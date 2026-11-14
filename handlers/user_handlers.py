@@ -508,12 +508,14 @@ async def process_festmates_start(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
+        season_start, season_end = get_active_tournament_date_range()
         months_raw = (
             session.query(Tournament.month)
             .join(Registration, Registration.tournament_id == Tournament.tournament_id)
             .filter(
                 Registration.user_id == user_id,
                 Registration.status == RegistrationStatus.APPROVED,
+                Tournament.date.between(season_start, season_end),
             )
             .distinct()
             .all()
@@ -554,6 +556,7 @@ async def process_festmates_month(callback_query: types.CallbackQuery):
     session = SessionLocal()
     try:
         user_id = callback_query.from_user.id
+        season_start, season_end = get_active_tournament_date_range()
         tournaments = (
             session.query(Tournament)
             .join(Registration, Registration.tournament_id == Tournament.tournament_id)
@@ -561,6 +564,7 @@ async def process_festmates_month(callback_query: types.CallbackQuery):
                 Tournament.month == selected_month,
                 Registration.user_id == user_id,
                 Registration.status == RegistrationStatus.APPROVED,
+                Tournament.date.between(season_start, season_end),
             )
             .order_by(Tournament.date)
             .all()
@@ -613,6 +617,10 @@ async def process_festmates_tournament(callback_query: types.CallbackQuery):
         )
         if not tournament:
             await callback_query.message.answer("❌ Турнир не найден.")
+            return
+        from utils.season import is_active_tournament_date
+        if not is_active_tournament_date(tournament.date):
+            await callback_query.message.answer("ℹ️ Этот фестиваль относится к архивному сезону.")
             return
         my_ok = (
             session.query(Registration)
